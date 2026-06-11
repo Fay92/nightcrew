@@ -1,0 +1,74 @@
+"""Notification tests: webhook against a real local HTTP server, and the
+macOS path with subprocess captured (so test runs never pop banners)."""
+
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+import pytest
+
+from ccnight import notify as notify_mod
+from ccnight.config import Config
+
+
+@pytest.fixture
+def webhook_server():
+    received = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", 0))
+            received.append(json.loads(self.rfile.read(length)))
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *args):  # keep test output clean
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_port}/hook", received
+    server.shutdown()
+
+
+def test_webhook_delivery(ccnight_home, webhook_server, monkeypatch):
+    url, received = webhook_server
+    monkeypatch.setattr("sys.platform", "linux")  # skip the osascript branch
+    cfg = Config(home=ccnight_home, webhook_url=url)
+    notify_mod.notify(cfg, "ccnight: task done", "demo finished")
+    assert len(received) == 1
+    assert received[0]["source"] == "ccnight"
+    assert received[0]["title"] == "ccnight: task done"
+    assert received[0]["message"] == "demo finished"
+    assert "timestamp" in received[0]
+
+
+def test_webhook_failure_is_swallowed(ccnight_home, monkeypatch, capsys):
+    monkeypatch.setattr("sys.platform", "linux")
+    cfg = Config(home=ccnight_home, webhook_url="http://127.0.0.1:1/unreachable")
+    notify_mod.notify(cfg, "t", "m")  # must not raise
+    assert "webhook delivery failed" in capsys.readouterr().err
+
+
+def test_macos_notification_invokes_osascript(ccnight_home, monkeypatch):
+    calls = []
+    monkeypatch.setattr("sys.platform", "darwin")
+    monkeypatch.setattr(
+        notify_mod.subprocess,
+        "run",
+        lambda *a, **k: calls.append(a[0]),
+    )
+    cfg = Config(home=ccnight_home)
+    notify_mod.notify(cfg, 'task "x"', "done\\now")
+    assert len(calls) == 1
+    assert calls[0][0] == "osascript"
+    script = calls[0][2]
+    assert 'with title "task \\"x\\""' in script  # quotes escaped
+
+
+def test_non_macos_degrades_to_log_line(ccnight_home, monkeypatch, capsys):
+    monkeypatch.setattr("sys.platform", "linux")
+    cfg = Config(home=ccnight_home)
+    notify_mod.notify(cfg, "title", "message")
+    assert "[notify] title: message" in capsys.readouterr().out
