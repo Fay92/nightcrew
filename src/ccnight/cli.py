@@ -1,6 +1,6 @@
 """Command line interface for ccnight.
 
-Subcommands: add, list, status, daemon, run-once, logs.
+Subcommands: add, list, status, daemon, run-once, logs, remove.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from .queue import (
     STATUS_PENDING,
     STATUS_RUNNING,
     AmbiguousTaskId,
+    StaleTask,
     TaskNotFound,
     TaskQueue,
     utcnow_iso,
@@ -167,6 +168,17 @@ def cmd_run_once(args: argparse.Namespace, config: Config) -> int:
     return 0 if applied.status == STATUS_DONE else 1
 
 
+def cmd_remove(args: argparse.Namespace, config: Config) -> int:
+    queue = TaskQueue(config.home)
+    try:
+        task = queue.remove(args.task_id, force=args.force)
+    except (TaskNotFound, AmbiguousTaskId, StaleTask) as exc:
+        print(f"ccnight: error: {exc}", file=sys.stderr)
+        return 2
+    print(f"removed task {task.id} ({task.status})")
+    return 0
+
+
 def cmd_logs(args: argparse.Namespace, config: Config) -> int:
     queue = TaskQueue(config.home)
     try:
@@ -293,6 +305,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_logs.add_argument("task_id", help="task id (or unique prefix)")
     p_logs.set_defaults(func=cmd_logs)
+
+    p_remove = sub.add_parser(
+        "remove",
+        help="delete a task from the queue",
+        description="Delete a task by id. Running tasks need --force.",
+    )
+    p_remove.add_argument("task_id", help="task id (or unique prefix)")
+    p_remove.add_argument(
+        "--force",
+        action="store_true",
+        help="also remove a task that is currently running",
+    )
+    p_remove.set_defaults(func=cmd_remove)
 
     return parser
 

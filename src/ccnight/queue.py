@@ -216,6 +216,31 @@ class TaskQueue:
             raise AmbiguousTaskId(f"{ref!r} matches several tasks: {ids}")
         return matches[0]
 
+    def remove(self, ref: str, *, force: bool = False) -> Task:
+        """Delete a task by id or unique prefix and return the removed task.
+
+        Running tasks are protected unless *force* is set: deleting one from
+        under an active daemon would only desync the queue from reality.
+        """
+        with self._lock():
+            tasks = self._read()
+            matches = [t for t in tasks if t.id == ref] or [
+                t for t in tasks if t.id.startswith(ref)
+            ]
+            if not matches:
+                raise TaskNotFound(f"no task matches {ref!r}")
+            if len(matches) > 1:
+                ids = ", ".join(t.id for t in matches)
+                raise AmbiguousTaskId(f"{ref!r} matches several tasks: {ids}")
+            task = matches[0]
+            if task.status == STATUS_RUNNING and not force:
+                raise StaleTask(
+                    f"task {task.id} is running; stop the daemon first "
+                    "or pass --force"
+                )
+            self._write([t for t in tasks if t.id != task.id])
+            return task
+
     def update(
         self, task_id: str, *, expect_status: str | None = None, **changes
     ) -> Task:

@@ -113,3 +113,32 @@ def test_concurrent_adds_do_not_corrupt(queue):
     assert len(tasks) == 40
     assert len({t.id for t in tasks}) == 40
     json.loads(queue.path.read_text())  # file must still be valid JSON
+
+
+def test_remove_by_prefix_and_unknown(ccnight_home):
+    from ccnight.queue import TaskNotFound, TaskQueue
+
+    q = TaskQueue(ccnight_home)
+    task = q.add("doomed", "/tmp")
+    removed = q.remove(task.id[:4])
+    assert removed.id == task.id
+    assert q.all() == []
+    try:
+        q.remove("ffffffff")
+        raise AssertionError("expected TaskNotFound")
+    except TaskNotFound:
+        pass
+
+
+def test_remove_running_requires_force(ccnight_home):
+    from ccnight.queue import STATUS_RUNNING, StaleTask, TaskQueue
+
+    q = TaskQueue(ccnight_home)
+    task = q.add("busy", "/tmp")
+    q.update(task.id, status=STATUS_RUNNING)
+    try:
+        q.remove(task.id)
+        raise AssertionError("expected StaleTask")
+    except StaleTask:
+        pass
+    assert q.remove(task.id, force=True).id == task.id
