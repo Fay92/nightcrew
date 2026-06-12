@@ -115,3 +115,31 @@ def test_doctor_reports_disabled_guardrails(ccnight_home, capsys, monkeypatch):
     assert main(["doctor"]) == 0
     out = capsys.readouterr().out
     assert "DISABLED" in out
+
+
+def test_build_plist_shape():
+    from pathlib import Path
+    from ccnight.service import build_plist, LABEL
+
+    p = build_plist(
+        ccnight_bin="/usr/local/bin/ccnight", window="22:00-08:00", reserve=None,
+        home=Path("/home/x/.config/ccnight"), log_path=Path("/home/x/.config/ccnight/daemon.log"),
+        path_env="/usr/bin:/bin",
+    )
+    assert p["Label"] == LABEL
+    assert p["ProgramArguments"] == ["/usr/local/bin/ccnight", "daemon", "--window", "22:00-08:00"]
+    assert p["RunAtLoad"] is True
+    assert p["KeepAlive"] == {"SuccessfulExit": False}
+    assert p["EnvironmentVariables"]["CCNIGHT_HOME"] == "/home/x/.config/ccnight"
+
+
+def test_build_plist_includes_reserve_when_set():
+    from pathlib import Path
+    from ccnight.service import build_plist
+
+    p = build_plist(
+        ccnight_bin="ccnight", window=None, reserve=20,
+        home=Path("/h"), log_path=Path("/h/log"), path_env="",
+    )
+    assert "--reserve" in p["ProgramArguments"]
+    assert "--window" not in p["ProgramArguments"]

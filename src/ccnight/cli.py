@@ -1,6 +1,7 @@
 """Command line interface for ccnight.
 
-Subcommands: add, list, status, daemon, run-once, logs, remove, doctor.
+Subcommands: add, list, status, daemon, run-once, logs, remove, doctor,
+install-service, uninstall-service.
 """
 
 from __future__ import annotations
@@ -171,6 +172,16 @@ def cmd_run_once(args: argparse.Namespace, config: Config) -> int:
         print(f"  reset at: {outcome.reset_at:%Y-%m-%d %H:%M %Z}")
     print(f"  log: {runner.log_path_for(config, applied)}")
     return 0 if applied.status == STATUS_DONE else 1
+
+
+def cmd_install_service(args: argparse.Namespace, config: Config) -> int:
+    from . import service
+    return service.install(config, window=args.window, reserve=args.reserve)
+
+
+def cmd_uninstall_service(args: argparse.Namespace, config: Config) -> int:
+    from . import service
+    return service.uninstall()
 
 
 def cmd_doctor(args: argparse.Namespace, config: Config) -> int:
@@ -380,6 +391,26 @@ def build_parser() -> argparse.ArgumentParser:
         "allow/deny tool guardrails applied to every unattended run.",
     )
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_install = sub.add_parser(
+        "install-service",
+        help="(macOS) run the daemon as an always-on background service",
+        description="Install a LaunchAgent so the scheduling daemon starts on "
+        "login and stays running. After this, just `ccnight add` - no need to "
+        "start the daemon manually.",
+    )
+    p_install.add_argument("--window", metavar="HH:MM-HH:MM", default=None,
+                           help="daily run window for the service (e.g. 22:00-08:00)")
+    p_install.add_argument("--reserve", type=int, default=None, metavar="PERCENT",
+                           help="interaction reserve percentage (see daemon --reserve)")
+    p_install.set_defaults(func=cmd_install_service)
+
+    p_uninstall = sub.add_parser(
+        "uninstall-service",
+        help="(macOS) remove the always-on background service",
+        description="Unload and delete the ccnight LaunchAgent.",
+    )
+    p_uninstall.set_defaults(func=cmd_uninstall_service)
 
     return parser
 
