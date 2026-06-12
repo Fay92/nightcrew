@@ -325,3 +325,60 @@ def test_daemon_sends_shift_report_when_queue_drains(config, monkeypatch):
     assert any("task done" in t for t in titles)
     report = [m for t, m in calls if "night shift report" in t]
     assert report and "1 task(s): 1 done, 0 failed" in report[0]
+
+
+def test_daemon_starts_and_stops_caffeinate(config, monkeypatch):
+    from ccnight import daemon as scheduler
+
+    started = {}
+    class FakeProc:
+        def terminate(self):
+            started["terminated"] = True
+    def fake_start():
+        started["started"] = True
+        return FakeProc()
+    monkeypatch.setattr(scheduler, "_start_caffeinate", fake_start)
+
+    scheduler.run_daemon(config, window=None, reserve=None, max_loops=1, idle_seconds=0)
+    assert started.get("started") and started.get("terminated")
+
+
+def test_daemon_no_caffeinate_flag(config, monkeypatch):
+    from ccnight import daemon as scheduler
+
+    called = {"n": 0}
+    monkeypatch.setattr(scheduler, "_start_caffeinate", lambda: called.__setitem__("n", called["n"] + 1))
+    scheduler.run_daemon(config, window=None, reserve=None, caffeinate=False, max_loops=1, idle_seconds=0)
+    assert called["n"] == 0
+
+
+def test_no_resume_storm_when_reset_in_past():
+    """A reset time in the past must not cause immediate back-to-back resumes."""
+    import datetime as dt
+    from ccnight.daemon import _next_wake_for_blocked, MIN_RESUME_BACKOFF
+    from ccnight.queue import Task
+
+    now = dt.datetime(2026, 6, 12, 4, 0, 0, tzinfo=dt.timezone.utc)
+    just_blocked = (now - dt.timedelta(seconds=10)).isoformat()
+    past_reset = (now - dt.timedelta(hours=1)).isoformat()  # bogus past reset
+    task = Task(id="b1", prompt="p", repo="/tmp", status="blocked_limit")
+    task.blocked_at = just_blocked
+    task.reset_at = past_reset
+
+    wake = _next_wake_for_blocked(task, now)
+    # must be pushed at least MIN_RESUME_BACKOFF past the block, not "now"
+    assert wake >= dt.datetime.fromisoformat(just_blocked) + MIN_RESUME_BACKOFF
+    assert wake > now  # i.e. NOT due immediately
+
+
+def test_future_reset_is_respected_as_is():
+    import datetime as dt
+    from ccnight.daemon import _next_wake_for_blocked
+    from ccnight.queue import Task
+
+    now = dt.datetime(2026, 6, 12, 1, 0, 0, tzinfo=dt.timezone.utc)
+    future_reset = (now + dt.timedelta(hours=2)).isoformat()
+    task = Task(id="b2", prompt="p", repo="/tmp", status="blocked_limit")
+    task.blocked_at = now.isoformat()
+    task.reset_at = future_reset
+    assert _next_wake_for_blocked(task, now) == dt.datetime.fromisoformat(future_reset)

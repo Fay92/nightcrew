@@ -49,6 +49,10 @@ POLL_SECONDS = 30
 IDLE_POLL_SECONDS = 120
 PROBE_INTERVAL = timedelta(minutes=30)
 RESERVE_RECHECK_SECONDS = 300
+# Floor between two resume attempts. Guards against a "resume storm": if a
+# limit message parses to a reset time in the past (timezone slip, boundary),
+# we still wait at least this long instead of hammering the API in a loop.
+MIN_RESUME_BACKOFF = timedelta(minutes=5)
 CCUSAGE_TIMEOUT_SECONDS = 60
 
 
@@ -199,10 +203,14 @@ def _parse_iso(value: str | None) -> datetime | None:
 
 
 def _next_wake_for_blocked(task: Task, now: datetime) -> datetime:
+    blocked = _parse_iso(task.blocked_at)
     reset = _parse_iso(task.reset_at)
     if reset is not None:
+        # Never resume sooner than the backoff floor, even if the parsed reset
+        # time is in the past -- this is what stops a resume storm.
+        if blocked is not None:
+            return max(reset, blocked + MIN_RESUME_BACKOFF)
         return reset
-    blocked = _parse_iso(task.blocked_at)
     if blocked is not None:
         return blocked + PROBE_INTERVAL
     return now  # no information at all: probe immediately
@@ -458,6 +466,7 @@ def run_daemon(
     window: TimeWindow | None = None,
     reserve: int | None = None,
     dry: bool = False,
+    caffeinate: bool = True,
     poll_seconds: float = POLL_SECONDS,
     idle_seconds: float = IDLE_POLL_SECONDS,
     max_loops: int | None = None,
@@ -473,11 +482,16 @@ def run_daemon(
     config.ensure_dirs()
     config.pid_path.write_text(str(os.getpid()))
 
+    keep_awake = _start_caffeinate() if caffeinate else None
+
     queue = TaskQueue(config.home)
     _recover_stale_running(queue)
+    awake = "on (caffeinate)" if keep_awake else (
+        "unavailable" if caffeinate else "off (--no-caffeinate)")
     print(
         f"[daemon] started (pid {os.getpid()}), window={window or 'always'}, "
-        f"reserve={reserve if reserve is not None else 'off'}, home={config.home}"
+        f"reserve={reserve if reserve is not None else 'off'}, "
+        f"sleep-prevention={awake}, home={config.home}"
     )
 
     last_logged = ""
@@ -540,8 +554,29 @@ def run_daemon(
     except KeyboardInterrupt:
         print("\n[daemon] interrupted, exiting")
     finally:
+        if keep_awake is not None:
+            keep_awake.terminate()
         try:
             config.pid_path.unlink()
         except OSError:
             pass
     return 0
+
+
+def _start_caffeinate() -> subprocess.Popen | None:
+    """Prevent system idle sleep while the daemon runs (macOS only).
+
+    ``caffeinate -i -w <pid>`` blocks idle sleep and exits by itself once this
+    daemon process exits, so a crash can't leave the machine permanently awake.
+    Returns None when unavailable (non-macOS, or caffeinate missing).
+    """
+    if sys.platform != "darwin" or shutil.which("caffeinate") is None:
+        return None
+    try:
+        return subprocess.Popen(
+            ["caffeinate", "-i", "-w", str(os.getpid())],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return None

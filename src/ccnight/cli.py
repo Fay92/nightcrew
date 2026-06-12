@@ -136,7 +136,11 @@ def cmd_daemon(args: argparse.Namespace, config: Config) -> int:
         print("ccnight: error: --reserve must be between 0 and 99", file=sys.stderr)
         return 2
     return scheduler.run_daemon(
-        config, window=window, reserve=args.reserve, dry=args.dry_run
+        config,
+        window=window,
+        reserve=args.reserve,
+        dry=args.dry_run,
+        caffeinate=not args.no_caffeinate,
     )
 
 
@@ -328,6 +332,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print the scheduling decision for the current queue and exit "
         "without calling claude",
+    )
+    p_daemon.add_argument(
+        "--no-caffeinate",
+        action="store_true",
+        help="do not auto-prevent system sleep (macOS keeps awake by default "
+        "so overnight tasks are not frozen by sleep)",
     )
     p_daemon.set_defaults(func=cmd_daemon)
 
