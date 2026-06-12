@@ -8,6 +8,7 @@ quietly degrades to the log line that is always printed.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import urllib.request
@@ -23,6 +24,8 @@ def notify(config: Config, title: str, message: str) -> None:
         _macos(title, message)
     if config.webhook_url:
         _webhook(config.webhook_url, config.webhook_format, title, message)
+    if config.notify_command:
+        _command(config.notify_command, title, message)
 
 
 def _applescript_escape(text: str) -> str:
@@ -68,6 +71,21 @@ def webhook_payload(url: str, fmt: str, title: str, message: str) -> dict:
         "message": message,
         "timestamp": utcnow_iso(),
     }
+
+
+def _command(cmd: str, title: str, message: str) -> None:
+    env = {**os.environ, "CCNIGHT_TITLE": title, "CCNIGHT_MESSAGE": message}
+    try:
+        subprocess.run(
+            cmd,
+            shell=True,
+            env=env,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"[notify] notify_command failed: {exc}", file=sys.stderr)
 
 
 def _webhook(url: str, fmt: str, title: str, message: str) -> None:

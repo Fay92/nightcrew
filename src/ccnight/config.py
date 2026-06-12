@@ -49,6 +49,10 @@ class Config:
     # Webhook payload shape: "auto" (detect Feishu/Lark and Slack from the
     # URL), "feishu", "slack" or "generic".
     webhook_format: str = "auto"
+    # Optional shell command executed for every notification, with the
+    # details exposed as $CCNIGHT_TITLE and $CCNIGHT_MESSAGE. Lets users
+    # plug in any messenger CLI without ccnight knowing about it.
+    notify_command: str | None = None
     # Extra regexes (case-insensitive) appended to the built-in
     # usage-limit detection patterns.
     extra_limit_patterns: list[str] = field(default_factory=list)
@@ -99,6 +103,7 @@ class Config:
             "continue_prompt",
             "webhook_url",
             "webhook_format",
+            "notify_command",
             "task_timeout_seconds",
         ):
             if key in raw:

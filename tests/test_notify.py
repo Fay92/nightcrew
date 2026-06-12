@@ -97,3 +97,16 @@ def test_webhook_payload_generic_default_and_explicit_override():
     assert generic["source"] == "ccnight" and generic["title"] == "t"
     forced = webhook_payload("https://example.com/hook", "feishu", "t", "m")
     assert forced["msg_type"] == "text"
+
+
+def test_notify_command_receives_env(ccnight_home, tmp_path):
+    from ccnight.config import Config
+    from ccnight.notify import notify
+
+    out = tmp_path / "captured.txt"
+    cfg = Config(
+        home=ccnight_home,
+        notify_command=f'printf "%s|%s" "$CCNIGHT_TITLE" "$CCNIGHT_MESSAGE" > {out}',
+    )
+    notify(cfg, "hello", "world")
+    assert out.read_text() == "hello|world"
