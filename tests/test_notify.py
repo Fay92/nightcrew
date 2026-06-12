@@ -110,3 +110,12 @@ def test_notify_command_receives_env(ccnight_home, tmp_path):
     )
     notify(cfg, "hello", "world")
     assert out.read_text() == "hello|world"
+
+
+def test_webhook_payload_feishu_automation_url_stays_generic():
+    from ccnight.notify import webhook_payload
+
+    p = webhook_payload(
+        "https://open.feishu.cn/anycross/trigger/callback/x", "auto", "t", "m"
+    )
+    assert "msg_type" not in p and p["title"] == "t"

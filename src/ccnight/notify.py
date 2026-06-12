@@ -55,7 +55,9 @@ def webhook_payload(url: str, fmt: str, title: str, message: str) -> dict:
     Feishu/Lark or Slack incoming-webhook URL just works with no config.
     """
     if fmt == "auto":
-        if "open.feishu.cn" in url or "open.larksuite.com" in url:
+        # Match the custom-bot path specifically: Feishu automation/anycross
+        # webhooks live on the same domains but expect custom JSON instead.
+        if "open.feishu.cn/open-apis/bot/" in url or "open.larksuite.com/open-apis/bot/" in url:
             fmt = "feishu"
         elif "hooks.slack.com" in url:
             fmt = "slack"
