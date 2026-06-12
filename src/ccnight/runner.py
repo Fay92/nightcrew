@@ -58,6 +58,8 @@ def build_command(config: Config, task: Task, *, resume: bool) -> list[str]:
     user_args = shlex.split(task.claude_args) if task.claude_args else []
     if config.permission_mode and "--permission-mode" not in user_args:
         cmd += ["--permission-mode", config.permission_mode]
+    if config.claude_extra_args:
+        cmd += shlex.split(config.claude_extra_args)
     cmd += user_args
     return cmd
 

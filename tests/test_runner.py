@@ -147,3 +147,14 @@ def test_resume_invocation_reaches_claude(config, repo, tmp_path, monkeypatch):
     argv = json.loads(args_file.read_text())
     assert argv[argv.index("--resume") + 1] == "sess-42"
     assert "continue" in argv
+
+
+def test_build_command_appends_config_extra_args(config):
+    from ccnight.queue import Task
+    from ccnight.runner import build_command
+
+    config.claude_extra_args = '--disallowedTools "Bash(git commit:*)" "Bash(rm:*)"'
+    task = Task(id="x1", prompt="do it", repo="/tmp", status="pending")
+    cmd = build_command(config, task, resume=False)
+    i = cmd.index("--disallowedTools")
+    assert cmd[i + 1] == "Bash(git commit:*)" and cmd[i + 2] == "Bash(rm:*)"

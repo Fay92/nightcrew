@@ -44,6 +44,10 @@ class Config:
     permission_mode: str = "acceptEdits"
     # Prompt sent when resuming a limit-blocked session.
     continue_prompt: str = "continue"
+    # Extra arguments appended to every claude invocation (shlex-split).
+    # Lets unattended runs get their own guardrails (e.g. --disallowedTools)
+    # without touching the project's interactive permission settings.
+    claude_extra_args: str | None = None
     # Optional URL that receives a JSON POST for every notification.
     webhook_url: str | None = None
     # Webhook payload shape: "auto" (detect Feishu/Lark and Slack from the
@@ -101,6 +105,7 @@ class Config:
             "claude_bin",
             "permission_mode",
             "continue_prompt",
+            "claude_extra_args",
             "webhook_url",
             "webhook_format",
             "notify_command",
