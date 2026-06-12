@@ -1,11 +1,12 @@
 """Command line interface for ccnight.
 
-Subcommands: add, list, status, daemon, run-once, logs, remove.
+Subcommands: add, list, status, daemon, run-once, logs, remove, doctor.
 """
 
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -168,6 +169,44 @@ def cmd_run_once(args: argparse.Namespace, config: Config) -> int:
     return 0 if applied.status == STATUS_DONE else 1
 
 
+def cmd_doctor(args: argparse.Namespace, config: Config) -> int:
+    """Print the effective configuration and unattended guardrails."""
+    allow = config.allow_tools if config.allow_tools is not None else runner.DEFAULT_ALLOW_TOOLS
+    deny = config.deny_tools if config.deny_tools is not None else runner.DEFAULT_DENY_TOOLS
+
+    print("ccnight configuration")
+    print(f"  home:            {config.home}")
+    print(f"  config file:     {config.config_path}"
+          + ("" if config.config_path.exists() else "  (none yet, using defaults)"))
+    claude_path = shutil.which(config.claude_bin)
+    print(f"  claude binary:   {claude_path or config.claude_bin + ' (NOT FOUND on PATH)'}")
+    print(f"  permission mode: {config.permission_mode or '(none)'}")
+    timeout = f"{config.task_timeout_seconds}s" if config.task_timeout_seconds else "none"
+    print(f"  task timeout:    {timeout}")
+
+    print("\nnotifications")
+    if config.notify_command:
+        print(f"  command:         {config.notify_command}")
+    if config.webhook_url:
+        print(f"  webhook:         {config.webhook_url}  (format: {config.webhook_format})")
+    if not config.notify_command and not config.webhook_url:
+        print("  (none configured - desktop notification only on macOS)")
+
+    print("\nunattended guardrails")
+    if not config.guardrails:
+        print("  DISABLED (guardrails=false) - relying on the project's own permissions")
+        return 0
+    src = "custom" if config.allow_tools is not None else "built-in default"
+    print(f"  allow ({src}, {len(allow)}): commands claude may run unattended")
+    for tool in allow:
+        print(f"    + {tool}")
+    src = "custom" if config.deny_tools is not None else "built-in default"
+    print(f"  deny ({src}, {len(deny)}): always blocked (deny wins over allow)")
+    for tool in deny:
+        print(f"    - {tool}")
+    return 0
+
+
 def cmd_remove(args: argparse.Namespace, config: Config) -> int:
     queue = TaskQueue(config.home)
     try:
@@ -318,6 +357,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="also remove a task that is currently running",
     )
     p_remove.set_defaults(func=cmd_remove)
+
+    p_doctor = sub.add_parser(
+        "doctor",
+        help="show the effective config and unattended guardrails",
+        description="Print where state lives, notification setup, and the "
+        "allow/deny tool guardrails applied to every unattended run.",
+    )
+    p_doctor.set_defaults(func=cmd_doctor)
 
     return parser
 

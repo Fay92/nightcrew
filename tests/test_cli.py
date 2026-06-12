@@ -98,3 +98,20 @@ def test_add_warns_when_daemon_not_running(ccnight_home, capsys):
     assert "queued task" in captured.out
     assert "daemon is NOT running" in captured.err
     assert "caffeinate" in captured.err
+
+
+def test_doctor_shows_guardrails(ccnight_home, capsys):
+    assert main(["doctor"]) == 0
+    out = capsys.readouterr().out
+    assert "unattended guardrails" in out
+    assert "Bash(git commit:*)" in out   # a deny entry is shown
+    assert "Bash(./gradlew:*)" in out    # an allow entry is shown
+
+
+def test_doctor_reports_disabled_guardrails(ccnight_home, capsys, monkeypatch):
+    import json
+    (ccnight_home).mkdir(parents=True, exist_ok=True)
+    (ccnight_home / "config.json").write_text(json.dumps({"guardrails": False}))
+    assert main(["doctor"]) == 0
+    out = capsys.readouterr().out
+    assert "DISABLED" in out
