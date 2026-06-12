@@ -56,7 +56,17 @@ def cmd_add(args: argparse.Namespace, config: Config) -> int:
     print(f"  repo:   {task.repo}")
     if task.claude_args:
         print(f"  args:   {task.claude_args}")
-    print("start the daemon to process the queue: ccnight daemon")
+    pid = scheduler.read_daemon_pid(config)
+    if pid:
+        print(f"daemon: running (pid {pid}) - it will pick this task up")
+    else:
+        print(
+            "\n"
+            "  WARNING: the daemon is NOT running - queued tasks will never start.\n"
+            "  Before you walk away, launch it (plugged in, lid open):\n"
+            '    caffeinate -i ccnight daemon --window "23:30-08:00"\n',
+            file=sys.stderr,
+        )
     return 0
 
 

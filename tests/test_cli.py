@@ -90,3 +90,11 @@ def test_run_once_executes_task(ccnight_home, fake_claude, monkeypatch, capsys):
     assert main(["logs", task_id]) == 0
     out = capsys.readouterr().out
     assert '"type": "ccnight.outcome"' in out or "ccnight.outcome" in out
+
+
+def test_add_warns_when_daemon_not_running(ccnight_home, capsys):
+    assert main(["add", "night task", "--repo", "/tmp"]) == 0
+    captured = capsys.readouterr()
+    assert "queued task" in captured.out
+    assert "daemon is NOT running" in captured.err
+    assert "caffeinate" in captured.err
