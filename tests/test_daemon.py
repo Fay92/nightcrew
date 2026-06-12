@@ -282,3 +282,46 @@ def test_daemon_refuses_second_instance(config, monkeypatch, capsys):
     rc = daemon.run_daemon(config, max_loops=1)
     assert rc == 1
     assert "already running" in capsys.readouterr().err
+
+
+def test_shift_report_summary():
+    from ccnight.daemon import shift_report
+    from ccnight.queue import Task
+
+    def t(id_, status, start, end):
+        task = Task(id=id_, prompt="p", repo="/tmp", status=status)
+        task.started_at = start
+        task.finished_at = end
+        return task
+
+    report = shift_report(
+        [
+            t("aaaa1111", "done", "2026-06-12T00:00:00+00:00", "2026-06-12T01:30:00+00:00"),
+            t("bbbb2222", "done", "2026-06-12T01:30:00+00:00", "2026-06-12T03:00:00+00:00"),
+            t("cccc3333", "failed", "2026-06-12T03:00:00+00:00", "2026-06-12T04:12:00+00:00"),
+        ]
+    )
+    assert "3 task(s): 2 done, 1 failed" in report
+    assert "wall 4.2h" in report
+    assert "[cccc3333] failed" in report
+
+
+def test_daemon_sends_shift_report_when_queue_drains(config, monkeypatch):
+    from ccnight import daemon as scheduler
+    from ccnight.queue import TaskQueue
+
+    calls = []
+    monkeypatch.setattr(
+        "ccnight.daemon.notify", lambda cfg, title, msg: calls.append((title, msg))
+    )
+    monkeypatch.setenv("FAKE_CLAUDE_MODE", "ok")
+    queue = TaskQueue(config.home)
+    queue.add("night job", "/tmp")
+
+    rc = scheduler.run_daemon(config, window=None, reserve=None, idle_seconds=0, max_loops=2)
+    assert rc == 0
+    titles = [t for t, _ in calls]
+    assert any("task started" in t for t in titles)
+    assert any("task done" in t for t in titles)
+    report = [m for t, m in calls if "night shift report" in t]
+    assert report and "1 task(s): 1 done, 0 failed" in report[0]

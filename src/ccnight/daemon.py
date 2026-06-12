@@ -287,6 +287,28 @@ def limit_block_state(tasks: list[Task], now: datetime) -> tuple[bool, datetime 
 # ---------------------------------------------------------------------------
 
 
+def shift_report(finished: list[Task]) -> str:
+    """One-line batch summary sent when the queue drains ("night shift report")."""
+    done = sum(1 for t in finished if t.status == STATUS_DONE)
+    failed = len(finished) - done
+    wall = ""
+    starts = [t.started_at for t in finished if t.started_at]
+    ends = [t.finished_at for t in finished if t.finished_at]
+    if starts and ends:
+        try:
+            seconds = (
+                datetime.fromisoformat(max(ends)) - datetime.fromisoformat(min(starts))
+            ).total_seconds()
+            wall = f" · wall {seconds / 3600:.1f}h"
+        except ValueError:
+            pass
+    lines = [f"{len(finished)} task(s): {done} done, {failed} failed{wall}"]
+    lines += [f"[{t.id}] {t.status}" for t in finished[:5]]
+    if len(finished) > 5:
+        lines.append(f"... and {len(finished) - 5} more")
+    return "\n".join(lines)
+
+
 def apply_outcome(
     config: Config, queue: TaskQueue, task: Task, outcome: runner.RunOutcome
 ) -> Task:
@@ -460,6 +482,7 @@ def run_daemon(
 
     last_logged = ""
     loops = 0
+    batch: list[Task] = []
     try:
         while max_loops is None or loops < max_loops:
             loops += 1
@@ -489,6 +512,8 @@ def run_daemon(
                 notify(config, f"ccnight: task {verb}", f"[{claimed.id}] {short}")
                 outcome = runner.run_task(config, claimed)
                 applied = apply_outcome(config, queue, claimed, outcome)
+                if applied.status in (STATUS_DONE, STATUS_FAILED):
+                    batch.append(applied)
                 print(
                     f"[daemon] task {applied.id} -> {applied.status}"
                     + (f" ({outcome.detail[:120]})" if outcome.detail else "")
@@ -501,6 +526,9 @@ def run_daemon(
                 last_logged = log_line
 
             if decision.action == ACTION_IDLE:
+                if batch:
+                    notify(config, "ccnight: night shift report", shift_report(batch))
+                    batch = []
                 sleep_for = idle_seconds
             elif decision.wake_at is not None:
                 sleep_for = min(
