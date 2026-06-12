@@ -44,9 +44,16 @@ class Config:
     permission_mode: str = "acceptEdits"
     # Prompt sent when resuming a limit-blocked session.
     continue_prompt: str = "continue"
-    # Extra arguments appended to every claude invocation (shlex-split).
-    # Lets unattended runs get their own guardrails (e.g. --disallowedTools)
-    # without touching the project's interactive permission settings.
+    # Built-in unattended guardrails: inject a safe --allowedTools /
+    # --disallowedTools preset (see runner.DEFAULT_*_TOOLS) into every run so
+    # ccnight ships safe by default with no settings.json edits. Set false to
+    # rely entirely on the project's own permission config.
+    guardrails: bool = True
+    # Override the built-in allow / deny tool presets. None = use the default.
+    # An empty list disables that half. Project-specific build commands go here.
+    allow_tools: list[str] | None = None
+    deny_tools: list[str] | None = None
+    # Escape hatch: extra raw arguments appended to every claude invocation.
     claude_extra_args: str | None = None
     # Optional URL that receives a JSON POST for every notification.
     webhook_url: str | None = None
@@ -105,6 +112,7 @@ class Config:
             "claude_bin",
             "permission_mode",
             "continue_prompt",
+            "guardrails",
             "claude_extra_args",
             "webhook_url",
             "webhook_format",
@@ -113,7 +121,8 @@ class Config:
         ):
             if key in raw:
                 setattr(cfg, key, raw[key])
-        patterns = raw.get("extra_limit_patterns")
-        if isinstance(patterns, list):
-            cfg.extra_limit_patterns = [str(p) for p in patterns]
+        for key in ("allow_tools", "deny_tools", "extra_limit_patterns"):
+            value = raw.get(key)
+            if isinstance(value, list):
+                setattr(cfg, key, [str(p) for p in value])
         return cfg

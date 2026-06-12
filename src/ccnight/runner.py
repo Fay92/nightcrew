@@ -29,6 +29,36 @@ COMPLETED = "completed"
 HIT_LIMIT = "hit_limit"
 FAILED = "failed"
 
+# Built-in guardrails for unattended runs. Since nobody is at the keyboard to
+# approve a prompt, headless claude silently *denies* anything not allowed, so
+# we both deny dangerous commands outright (deny wins over allow) and allow the
+# build/read-only commands a task needs to verify itself. This ships safe by
+# default — installing ccnight is enough, no settings.json edits required.
+DEFAULT_DENY_TOOLS: tuple[str, ...] = (
+    # never commit / push / rewrite history or trash uncommitted work
+    "Bash(git commit:*)", "Bash(git push:*)", "Bash(git add:*)",
+    "Bash(git reset:*)", "Bash(git checkout:*)", "Bash(git restore:*)",
+    "Bash(git stash:*)", "Bash(git clean:*)", "Bash(git rebase:*)",
+    # never delete
+    "Bash(rm:*)", "Bash(rmdir:*)",
+    # never download / install / escalate
+    "Bash(curl:*)", "Bash(wget:*)", "Bash(git clone:*)", "Bash(brew:*)",
+    "Bash(npm install:*)", "Bash(pnpm install:*)", "Bash(yarn add:*)",
+    "Bash(pip install:*)", "Bash(pip3 install:*)", "Bash(sudo:*)",
+)
+DEFAULT_ALLOW_TOOLS: tuple[str, ...] = (
+    "Read", "Write", "Edit", "Grep", "Glob",
+    # build / test runners
+    "Bash(./gradlew:*)", "Bash(gradle:*)", "Bash(mvn:*)",
+    "Bash(npm run:*)", "Bash(pnpm run:*)", "Bash(yarn:*)", "Bash(make:*)",
+    "Bash(cargo:*)", "Bash(go build:*)", "Bash(go test:*)", "Bash(pytest:*)",
+    # read-only inspection
+    "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)",
+    "Bash(git show:*)", "Bash(git branch:*)",
+    "Bash(grep:*)", "Bash(rg:*)", "Bash(find:*)", "Bash(ls:*)",
+    "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(echo:*)",
+)
+
 
 @dataclass
 class RunOutcome:
@@ -58,6 +88,13 @@ def build_command(config: Config, task: Task, *, resume: bool) -> list[str]:
     user_args = shlex.split(task.claude_args) if task.claude_args else []
     if config.permission_mode and "--permission-mode" not in user_args:
         cmd += ["--permission-mode", config.permission_mode]
+    if config.guardrails and "--allowedTools" not in user_args:
+        allow = config.allow_tools if config.allow_tools is not None else DEFAULT_ALLOW_TOOLS
+        deny = config.deny_tools if config.deny_tools is not None else DEFAULT_DENY_TOOLS
+        if allow:
+            cmd += ["--allowedTools", *allow]
+        if deny:
+            cmd += ["--disallowedTools", *deny]
     if config.claude_extra_args:
         cmd += shlex.split(config.claude_extra_args)
     cmd += user_args

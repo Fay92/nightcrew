@@ -153,8 +153,60 @@ def test_build_command_appends_config_extra_args(config):
     from ccnight.queue import Task
     from ccnight.runner import build_command
 
+    config.guardrails = False  # isolate the raw escape hatch
     config.claude_extra_args = '--disallowedTools "Bash(git commit:*)" "Bash(rm:*)"'
     task = Task(id="x1", prompt="do it", repo="/tmp", status="pending")
     cmd = build_command(config, task, resume=False)
     i = cmd.index("--disallowedTools")
     assert cmd[i + 1] == "Bash(git commit:*)" and cmd[i + 2] == "Bash(rm:*)"
+
+
+def test_guardrails_on_by_default(config):
+    from ccnight.queue import Task
+    from ccnight.runner import build_command, DEFAULT_DENY_TOOLS, DEFAULT_ALLOW_TOOLS
+
+    task = Task(id="g1", prompt="do it", repo="/tmp", status="pending")
+    cmd = build_command(config, task, resume=False)
+    assert "--allowedTools" in cmd and "--disallowedTools" in cmd
+    assert "Bash(git commit:*)" in cmd  # a deny entry
+    assert "Bash(./gradlew:*)" in cmd   # an allow entry
+    # deny entries must all be present
+    for d in DEFAULT_DENY_TOOLS:
+        assert d in cmd
+
+
+def test_guardrails_can_be_disabled(config):
+    from ccnight.queue import Task
+    from ccnight.runner import build_command
+
+    config.guardrails = False
+    task = Task(id="g2", prompt="x", repo="/tmp", status="pending")
+    cmd = build_command(config, task, resume=False)
+    assert "--allowedTools" not in cmd and "--disallowedTools" not in cmd
+
+
+def test_custom_allow_deny_override_defaults(config):
+    from ccnight.queue import Task
+    from ccnight.runner import build_command
+
+    config.allow_tools = ["Bash(./gradlew:*)", "Bash(custombuild:*)"]
+    config.deny_tools = []
+    task = Task(id="g3", prompt="x", repo="/tmp", status="pending")
+    cmd = build_command(config, task, resume=False)
+    i = cmd.index("--allowedTools")
+    assert "Bash(custombuild:*)" in cmd
+    assert "--disallowedTools" not in cmd  # empty deny list disables that half
+
+
+def test_task_claude_args_allowedtools_suppresses_builtin(config):
+    from ccnight.queue import Task
+    from ccnight.runner import build_command
+
+    task = Task(
+        id="g4", prompt="x", repo="/tmp", status="pending",
+        claude_args='--allowedTools "Bash(only:*)"',
+    )
+    cmd = build_command(config, task, resume=False)
+    # task opted into its own allowlist; built-in preset stays out of the way
+    assert cmd.count("--allowedTools") == 1
+    assert "Bash(only:*)" in cmd
