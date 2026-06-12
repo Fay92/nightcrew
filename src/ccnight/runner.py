@@ -14,6 +14,8 @@ limits cannot trigger a false positive.
 from __future__ import annotations
 
 import json
+import os
+import signal
 import shlex
 import subprocess
 import threading
@@ -103,6 +105,22 @@ def build_command(config: Config, task: Task, *, resume: bool) -> list[str]:
     return cmd
 
 
+def _kill_process_tree(proc: subprocess.Popen) -> None:
+    """Kill the subprocess and everything it spawned (gradle, tests, ...).
+
+    The child runs in its own process group (start_new_session), so killing
+    the group reaps orphaned build processes that would otherwise keep burning
+    CPU and quota after a timeout. Falls back to killing just the parent.
+    """
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
 def log_path_for(config: Config, task: Task) -> Path:
     return config.logs_dir / f"{task.id}.jsonl"
 
@@ -132,6 +150,9 @@ def run_task(config: Config, task: Task) -> RunOutcome:
             text=True,
             encoding="utf-8",
             errors="replace",
+            # Own process group so a timeout can kill the whole tree (claude
+            # plus any gradle/test child it spawned), not just the parent.
+            start_new_session=(os.name != "nt"),
         )
     except OSError as exc:
         return RunOutcome(FAILED, session_id, None, f"failed to launch {cmd[0]}: {exc}")
@@ -152,7 +173,7 @@ def run_task(config: Config, task: Task) -> RunOutcome:
 
         def _kill() -> None:
             timed_out.set()
-            proc.kill()
+            _kill_process_tree(proc)
 
         watchdog = threading.Timer(config.task_timeout_seconds, _kill)
         watchdog.daemon = True

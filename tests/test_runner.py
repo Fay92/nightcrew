@@ -229,3 +229,42 @@ def test_append_system_prompt_absent_by_default(config):
 
     task = Task(id="sp2", prompt="x", repo="/tmp", status="pending")
     assert "--append-system-prompt" not in build_command(config, task, resume=False)
+
+
+def test_timeout_kills_orphaned_child(config, repo, tmp_path, monkeypatch):
+    """A grandchild spawned by the fake claude must die when the task times out."""
+    import os
+    import time
+    import signal as _signal
+
+    marker = tmp_path / "child.pid"
+    # fake claude that spawns a long-lived grandchild, records its pid, then hangs
+    stub = tmp_path / "claude_spawns"
+    stub.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, time, subprocess\n"
+        "p = subprocess.Popen(['sleep', '120'])\n"
+        f"f = open(r'{marker}', 'w'); f.write(str(p.pid)); f.flush(); os.fsync(f.fileno())\n"
+        "time.sleep(120)\n"
+    )
+    stub.chmod(0o755)
+    config.claude_bin = str(stub)
+    config.task_timeout_seconds = 2
+
+    outcome = runner.run_task(config, make_task(repo))
+    assert outcome.status == runner.FAILED
+    assert "timed out" in outcome.detail
+
+    child_pid = int(marker.read_text())
+    time.sleep(0.2)  # let the kill propagate
+    try:
+        os.kill(child_pid, 0)
+        alive = True
+    except ProcessLookupError:
+        alive = False
+    if alive:  # cleanup before failing
+        try:
+            os.kill(child_pid, _signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    assert not alive, "grandchild survived the timeout (orphan leak)"
