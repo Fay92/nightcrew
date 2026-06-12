@@ -484,6 +484,9 @@ def run_daemon(
                     )
                 except StaleTask:
                     continue  # someone else (run-once) grabbed it
+                verb = "resumed" if decision.action == ACTION_RESUME else "started"
+                short = claimed.prompt[:60] + ("..." if len(claimed.prompt) > 60 else "")
+                notify(config, f"ccnight: task {verb}", f"[{claimed.id}] {short}")
                 outcome = runner.run_task(config, claimed)
                 applied = apply_outcome(config, queue, claimed, outcome)
                 print(

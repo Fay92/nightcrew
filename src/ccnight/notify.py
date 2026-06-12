@@ -22,7 +22,7 @@ def notify(config: Config, title: str, message: str) -> None:
     if sys.platform == "darwin":
         _macos(title, message)
     if config.webhook_url:
-        _webhook(config.webhook_url, title, message)
+        _webhook(config.webhook_url, config.webhook_format, title, message)
 
 
 def _applescript_escape(text: str) -> str:
@@ -45,15 +45,33 @@ def _macos(title: str, message: str) -> None:
         pass
 
 
-def _webhook(url: str, title: str, message: str) -> None:
-    payload = json.dumps(
-        {
-            "source": "ccnight",
-            "title": title,
-            "message": message,
-            "timestamp": utcnow_iso(),
-        }
-    ).encode("utf-8")
+def webhook_payload(url: str, fmt: str, title: str, message: str) -> dict:
+    """Build the POST body for the given webhook provider format.
+
+    "auto" sniffs well-known provider hosts from the URL so that pasting a
+    Feishu/Lark or Slack incoming-webhook URL just works with no config.
+    """
+    if fmt == "auto":
+        if "open.feishu.cn" in url or "open.larksuite.com" in url:
+            fmt = "feishu"
+        elif "hooks.slack.com" in url:
+            fmt = "slack"
+        else:
+            fmt = "generic"
+    if fmt == "feishu":
+        return {"msg_type": "text", "content": {"text": f"{title}\n{message}"}}
+    if fmt == "slack":
+        return {"text": f"*{title}*\n{message}"}
+    return {
+        "source": "ccnight",
+        "title": title,
+        "message": message,
+        "timestamp": utcnow_iso(),
+    }
+
+
+def _webhook(url: str, fmt: str, title: str, message: str) -> None:
+    payload = json.dumps(webhook_payload(url, fmt, title, message)).encode("utf-8")
     request = urllib.request.Request(
         url,
         data=payload,

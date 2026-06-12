@@ -46,6 +46,9 @@ class Config:
     continue_prompt: str = "continue"
     # Optional URL that receives a JSON POST for every notification.
     webhook_url: str | None = None
+    # Webhook payload shape: "auto" (detect Feishu/Lark and Slack from the
+    # URL), "feishu", "slack" or "generic".
+    webhook_format: str = "auto"
     # Extra regexes (case-insensitive) appended to the built-in
     # usage-limit detection patterns.
     extra_limit_patterns: list[str] = field(default_factory=list)
@@ -95,6 +98,7 @@ class Config:
             "permission_mode",
             "continue_prompt",
             "webhook_url",
+            "webhook_format",
             "task_timeout_seconds",
         ):
             if key in raw:

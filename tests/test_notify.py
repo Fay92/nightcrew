@@ -72,3 +72,28 @@ def test_non_macos_degrades_to_log_line(ccnight_home, monkeypatch, capsys):
     cfg = Config(home=ccnight_home)
     notify_mod.notify(cfg, "title", "message")
     assert "[notify] title: message" in capsys.readouterr().out
+
+
+def test_webhook_payload_auto_detects_feishu():
+    from ccnight.notify import webhook_payload
+
+    p = webhook_payload(
+        "https://open.feishu.cn/open-apis/bot/v2/hook/abc", "auto", "t", "m"
+    )
+    assert p == {"msg_type": "text", "content": {"text": "t\nm"}}
+
+
+def test_webhook_payload_auto_detects_slack():
+    from ccnight.notify import webhook_payload
+
+    p = webhook_payload("https://hooks.slack.com/services/x/y/z", "auto", "t", "m")
+    assert p == {"text": "*t*\nm"}
+
+
+def test_webhook_payload_generic_default_and_explicit_override():
+    from ccnight.notify import webhook_payload
+
+    generic = webhook_payload("https://example.com/hook", "auto", "t", "m")
+    assert generic["source"] == "ccnight" and generic["title"] == "t"
+    forced = webhook_payload("https://example.com/hook", "feishu", "t", "m")
+    assert forced["msg_type"] == "text"
