@@ -88,6 +88,8 @@ def build_command(config: Config, task: Task, *, resume: bool) -> list[str]:
     user_args = shlex.split(task.claude_args) if task.claude_args else []
     if config.permission_mode and "--permission-mode" not in user_args:
         cmd += ["--permission-mode", config.permission_mode]
+    if config.append_system_prompt and "--append-system-prompt" not in user_args:
+        cmd += ["--append-system-prompt", config.append_system_prompt]
     if config.guardrails and "--allowedTools" not in user_args:
         allow = config.allow_tools if config.allow_tools is not None else DEFAULT_ALLOW_TOOLS
         deny = config.deny_tools if config.deny_tools is not None else DEFAULT_DENY_TOOLS

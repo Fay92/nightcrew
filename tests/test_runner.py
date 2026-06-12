@@ -210,3 +210,22 @@ def test_task_claude_args_allowedtools_suppresses_builtin(config):
     # task opted into its own allowlist; built-in preset stays out of the way
     assert cmd.count("--allowedTools") == 1
     assert "Bash(only:*)" in cmd
+
+
+def test_append_system_prompt_injected(config):
+    from ccnight.queue import Task
+    from ccnight.runner import build_command
+
+    config.append_system_prompt = "Work protocol: analyse, plan, execute, self-check."
+    task = Task(id="sp1", prompt="do it", repo="/tmp", status="pending")
+    cmd = build_command(config, task, resume=False)
+    i = cmd.index("--append-system-prompt")
+    assert cmd[i + 1] == "Work protocol: analyse, plan, execute, self-check."
+
+
+def test_append_system_prompt_absent_by_default(config):
+    from ccnight.queue import Task
+    from ccnight.runner import build_command
+
+    task = Task(id="sp2", prompt="x", repo="/tmp", status="pending")
+    assert "--append-system-prompt" not in build_command(config, task, resume=False)

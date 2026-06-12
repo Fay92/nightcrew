@@ -44,6 +44,10 @@ class Config:
     permission_mode: str = "acceptEdits"
     # Prompt sent when resuming a limit-blocked session.
     continue_prompt: str = "continue"
+    # Optional working protocol injected via --append-system-prompt on every
+    # run, so unattended tasks follow a consistent method (analyse, plan,
+    # review, execute, self-check) without baking it into each task's text.
+    append_system_prompt: str | None = None
     # Built-in unattended guardrails: inject a safe --allowedTools /
     # --disallowedTools preset (see runner.DEFAULT_*_TOOLS) into every run so
     # ccnight ships safe by default with no settings.json edits. Set false to
@@ -112,6 +116,7 @@ class Config:
             "claude_bin",
             "permission_mode",
             "continue_prompt",
+            "append_system_prompt",
             "guardrails",
             "claude_extra_args",
             "webhook_url",

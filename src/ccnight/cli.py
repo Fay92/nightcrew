@@ -183,6 +183,11 @@ def cmd_doctor(args: argparse.Namespace, config: Config) -> int:
     print(f"  permission mode: {config.permission_mode or '(none)'}")
     timeout = f"{config.task_timeout_seconds}s" if config.task_timeout_seconds else "none"
     print(f"  task timeout:    {timeout}")
+    if config.append_system_prompt:
+        first = config.append_system_prompt.strip().splitlines()[0]
+        print(f"  work protocol:   on ({first[:50]}...)")
+    else:
+        print("  work protocol:   off (no --append-system-prompt)")
 
     print("\nnotifications")
     if config.notify_command:
