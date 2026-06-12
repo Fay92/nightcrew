@@ -40,7 +40,13 @@ def build_plist(
         # Restart the daemon if it ever exits abnormally (crash, OOM); a clean
         # exit (the user ran `ccnight uninstall-service`) is left alone.
         "KeepAlive": {"SuccessfulExit": False},
-        "EnvironmentVariables": {"PATH": path_env, "CCNIGHT_HOME": str(home)},
+        # PYTHONUNBUFFERED so the daemon's log lines hit daemon.log in real
+        # time; without it launchd block-buffers stdout and the log looks empty.
+        "EnvironmentVariables": {
+            "PATH": path_env,
+            "CCNIGHT_HOME": str(home),
+            "PYTHONUNBUFFERED": "1",
+        },
         "StandardOutPath": str(log_path),
         "StandardErrorPath": str(log_path),
         "ProcessType": "Background",

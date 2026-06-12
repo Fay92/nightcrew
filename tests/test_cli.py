@@ -131,6 +131,7 @@ def test_build_plist_shape():
     assert p["RunAtLoad"] is True
     assert p["KeepAlive"] == {"SuccessfulExit": False}
     assert p["EnvironmentVariables"]["CCNIGHT_HOME"] == "/home/x/.config/ccnight"
+    assert p["EnvironmentVariables"]["PYTHONUNBUFFERED"] == "1"
 
 
 def test_build_plist_includes_reserve_when_set():
