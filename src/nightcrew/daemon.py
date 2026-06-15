@@ -38,6 +38,7 @@ from .queue import (
     STATUS_DONE,
     STATUS_FAILED,
     STATUS_PENDING,
+    STATUS_RETRY,
     STATUS_RUNNING,
     StaleTask,
     Task,
@@ -51,6 +52,11 @@ PROBE_INTERVAL = timedelta(minutes=30)
 RESERVE_RECHECK_SECONDS = 300
 # How long to wait before retrying after a failed preflight (IP/VPN not ready).
 PREFLIGHT_RETRY_SECONDS = 120
+# Transient (platform/network) error backoff: exponential, hard-capped so a
+# nightly outage never turns into a high-frequency retry storm (API/risk).
+TRANSIENT_BACKOFF_BASE = 60
+TRANSIENT_BACKOFF_MAX = 1800  # 30 min cap
+TRANSIENT_NOTIFY_AT = 3       # notify once after this many consecutive retries
 # Floor between two resume attempts. Guards against a "resume storm": if a
 # limit message parses to a reset time in the past (timezone slip, boundary),
 # we still wait at least this long instead of hammering the API in a loop.
@@ -232,6 +238,7 @@ def decide(
         (t for t in tasks if t.status == STATUS_PENDING), key=lambda t: t.created_at
     )
     blocked = [t for t in tasks if t.status == STATUS_BLOCKED_LIMIT]
+    retrying = [t for t in tasks if t.status == STATUS_RETRY]
 
     if running:
         return Decision(
@@ -240,7 +247,7 @@ def decide(
             wake_at=now + timedelta(seconds=POLL_SECONDS),
             reason=f"task {running[0].id} is already running",
         )
-    if not pending and not blocked:
+    if not pending and not blocked and not retrying:
         return Decision(ACTION_IDLE, reason="queue has no runnable tasks")
 
     if window is not None and not window.contains(now.time()):
@@ -279,6 +286,24 @@ def decide(
             ACTION_WAIT_RESET,
             wake_at=wake,
             reason=f"usage limit active, waking at {wake:%Y-%m-%d %H:%M}",
+        )
+
+    if retrying:
+        # Platform/network glitch: back off, retry when due. Holds the queue
+        # (a fresh task would hit the same outage), never marks failed.
+        def _retry_at(t: Task) -> datetime:
+            return _parse_iso(t.retry_at) or now
+        due = [t for t in retrying if _retry_at(t) <= now]
+        if due:
+            task = min(due, key=_retry_at)
+            verb = ACTION_RESUME if task.session_id else ACTION_RUN
+            return Decision(verb, task=task,
+                            reason=f"transient retry (attempt {task.retry_count})")
+        wake = min(_retry_at(t) for t in retrying)
+        return Decision(
+            ACTION_WAIT_RESET,
+            wake_at=wake,
+            reason=f"platform error backoff, retrying at {wake:%H:%M:%S}",
         )
 
     return Decision(ACTION_RUN, task=pending[0], reason="next pending task (FIFO)")
@@ -353,6 +378,26 @@ def apply_outcome(
         else:
             message = "queue paused, reset time unknown (probing every 30 min)"
         notify(config, "nightcrew: usage limit hit", message)
+    elif outcome.status == runner.TRANSIENT:
+        n = task.retry_count + 1
+        backoff = min(TRANSIENT_BACKOFF_BASE * (2 ** task.retry_count),
+                      TRANSIENT_BACKOFF_MAX)
+        retry_at = local_now() + timedelta(seconds=backoff)
+        updated = queue.update(
+            task.id,
+            status=STATUS_RETRY,
+            session_id=outcome.session_id,
+            retry_count=n,
+            retry_at=retry_at.isoformat(),
+            log_file=log_file,
+            error=outcome.detail[:500],
+        )
+        # Notify once when it's clearly a sustained outage, not every blip.
+        if n == TRANSIENT_NOTIFY_AT:
+            notify(config, "nightcrew: platform error",
+                   f"network/platform glitch — backing off and retrying "
+                   f"(attempt {n}, up to {TRANSIENT_BACKOFF_MAX // 60} min apart). "
+                   f"task [{task.id}] held, NOT failed")
     else:
         updated = queue.update(
             task.id,
@@ -415,7 +460,8 @@ def _recover_stale_running(queue: TaskQueue) -> None:
 
 def _counts_line(tasks: list[Task]) -> str:
     by_status = {status: 0 for status in
-                 (STATUS_PENDING, STATUS_RUNNING, STATUS_BLOCKED_LIMIT, STATUS_DONE, STATUS_FAILED)}
+                 (STATUS_PENDING, STATUS_RUNNING, STATUS_BLOCKED_LIMIT, STATUS_RETRY,
+                  STATUS_DONE, STATUS_FAILED)}
     for task in tasks:
         by_status[task.status] = by_status.get(task.status, 0) + 1
     return ", ".join(f"{count} {status}" for status, count in by_status.items())
@@ -513,7 +559,8 @@ def run_daemon(
             in_window = window is None or window.contains(now.time())
             if window is not None and was_in_window and not in_window:
                 unfinished = [t for t in tasks if t.status in
-                              (STATUS_PENDING, STATUS_RUNNING, STATUS_BLOCKED_LIMIT)]
+                              (STATUS_PENDING, STATUS_RUNNING, STATUS_BLOCKED_LIMIT,
+                               STATUS_RETRY)]
                 if unfinished:
                     notify(config, "nightcrew: window closed",
                            f"{len(unfinished)} task(s) still unfinished when the "

@@ -441,3 +441,49 @@ def test_no_spurious_window_close_on_startup_outside_window(config, monkeypatch)
     scheduler.run_daemon(config, window=win, reserve=None, caffeinate=False,
                          max_loops=1, idle_seconds=0, poll_seconds=0)
     assert not any("window closed" in t for t, _ in calls)
+
+
+def test_apply_outcome_transient_backs_off(config):
+    import nightcrew.daemon as scheduler
+    from nightcrew.runner import RunOutcome, TRANSIENT
+    from nightcrew.queue import TaskQueue, STATUS_RETRY
+    q = TaskQueue(config.home)
+    t = q.add("job", "/tmp")
+    scheduler.apply_outcome(config, q, t, RunOutcome(TRANSIENT, "s1", None, "ECONNRESET"))
+    back = q.get(t.id)
+    assert back.status == STATUS_RETRY
+    assert back.retry_count == 1
+    assert back.retry_at is not None
+    assert back.status != "failed"   # the whole point: not failed
+
+
+def test_transient_backoff_grows_and_caps(config):
+    import datetime as dt
+    import nightcrew.daemon as scheduler
+    from nightcrew.runner import RunOutcome, TRANSIENT
+    from nightcrew.queue import TaskQueue
+    q = TaskQueue(config.home)
+    t = q.add("job", "/tmp")
+    for _ in range(8):  # repeated outage
+        scheduler.apply_outcome(config, q, q.get(t.id),
+                                RunOutcome(TRANSIENT, None, None, "glitch"))
+    final = q.get(t.id)
+    assert final.retry_count == 8
+    gap = (dt.datetime.fromisoformat(final.retry_at) - scheduler.local_now()).total_seconds()
+    assert gap <= scheduler.TRANSIENT_BACKOFF_MAX + 5   # capped, never a storm
+
+
+def test_retry_task_holds_queue_until_due():
+    import datetime as dt
+    from nightcrew.daemon import decide, ACTION_WAIT_RESET, ACTION_RESUME
+    from nightcrew.queue import Task, STATUS_RETRY, STATUS_PENDING
+    now = dt.datetime(2026, 6, 16, 2, 0).astimezone()
+    # not due: holds the queue, even over a fresh pending task
+    retry = Task(id="r1", prompt="p", repo="/tmp", status=STATUS_RETRY, retry_count=1,
+                 retry_at=(now + dt.timedelta(minutes=5)).isoformat())
+    pend = Task(id="p1", prompt="p", repo="/tmp", status=STATUS_PENDING)
+    assert decide([retry, pend], now=now).action == ACTION_WAIT_RESET
+    # due + has session -> resume it
+    due = Task(id="r2", prompt="p", repo="/tmp", status=STATUS_RETRY, retry_count=2,
+               session_id="s", retry_at=(now - dt.timedelta(seconds=1)).isoformat())
+    assert decide([due], now=now).action == ACTION_RESUME

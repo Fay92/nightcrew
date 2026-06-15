@@ -296,3 +296,25 @@ def test_stall_watchdog_kills_silent_task(config, repo, tmp_path):
     assert outcome.status == runner.FAILED
     assert "stalled" in outcome.detail
     assert elapsed < 10  # killed quickly, not after the full 30s
+
+
+def test_transient_network_error_is_retry_not_failed(config):
+    from nightcrew.runner import _classify, TRANSIENT, FAILED
+    # platform/network glitch -> TRANSIENT (will be retried)
+    o = _classify(config, returncode=1, result_event=None,
+                  suspicious=["API Error: Unable to connect (ECONNRESET)"],
+                  session_id="s1", timed_out=False)
+    assert o.status == TRANSIENT
+    # a real task error -> FAILED (not retried)
+    o2 = _classify(config, returncode=1, result_event=None,
+                   suspicious=["error: cannot find symbol Foo"],
+                   session_id="s1", timed_out=False)
+    assert o2.status == FAILED
+
+
+def test_model_unavailable_is_transient(config):
+    from nightcrew.runner import _classify, TRANSIENT
+    o = _classify(config, returncode=1, result_event={"subtype": "error"},
+                  suspicious=["There's an issue with the selected model (claude-opus-4-8)"],
+                  session_id=None, timed_out=False)
+    assert o.status == TRANSIENT

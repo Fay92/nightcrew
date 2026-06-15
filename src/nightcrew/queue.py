@@ -21,12 +21,14 @@ from pathlib import Path
 STATUS_PENDING = "pending"
 STATUS_RUNNING = "running"
 STATUS_BLOCKED_LIMIT = "blocked_limit"
+STATUS_RETRY = "retry"  # transient platform/network error — backing off
 STATUS_DONE = "done"
 STATUS_FAILED = "failed"
 ALL_STATUSES = (
     STATUS_PENDING,
     STATUS_RUNNING,
     STATUS_BLOCKED_LIMIT,
+    STATUS_RETRY,
     STATUS_DONE,
     STATUS_FAILED,
 )
@@ -75,6 +77,10 @@ class Task:
     # When the task entered blocked_limit; drives the 30-minute probe
     # backoff when reset_at is unknown.
     blocked_at: str | None = None
+    # Consecutive transient-error retries; drives exponential backoff.
+    retry_count: int = 0
+    # ISO timestamp of the next retry attempt (set on transient errors).
+    retry_at: str | None = None
     # Failure reason, for display in list/status.
     error: str | None = None
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
 import shlex
 import subprocess
@@ -31,6 +32,20 @@ from .queue import Task, utcnow_iso
 COMPLETED = "completed"
 HIT_LIMIT = "hit_limit"
 FAILED = "failed"
+TRANSIENT = "transient"  # platform/network glitch — retry with backoff, don't fail
+
+# Errors that mean "the platform hiccuped", not "the task is wrong". These are
+# retried with exponential backoff instead of being marked failed, so a nightly
+# network drop or a briefly-unavailable model doesn't waste the whole window.
+TRANSIENT_RE = re.compile(
+    r"econnreset|connection reset|connection refused|unable to connect|"
+    r"network error|socket hang ?up|getaddrinfo|enotfound|etimedout|"
+    r"timed? ?out connecting|temporarily unavailable|service unavailable|"
+    r"issue with the selected model|model is overloaded|overloaded_error|"
+    r"internal server error|bad gateway|gateway time-?out|\b50[234]\b|"
+    r"api error|fetch failed|request failed",
+    re.IGNORECASE,
+)
 
 # Built-in guardrails for unattended runs. Since nobody is at the keyboard to
 # approve a prompt, headless claude silently *denies* anything not allowed, so
@@ -304,4 +319,8 @@ def _classify(
         detail += f" (result subtype: {result_event.get('subtype')})"
     if tail:
         detail += f": {tail}"
+
+    # Platform/network glitch (not the task's fault): retry with backoff.
+    if TRANSIENT_RE.search(scan_text):
+        return RunOutcome(TRANSIENT, session_id, None, detail)
     return RunOutcome(FAILED, session_id, None, detail)
