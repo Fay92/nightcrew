@@ -78,6 +78,25 @@ nightcrew run-once <task-id>      # run one task right now
 nightcrew logs <task-id>          # dump the captured stream-json log
 ```
 
+## Queueing tasks
+
+Two ways into the same queue:
+
+**By chatting — the skill.** With the skill installed (`install.sh` sets it up; if you installed piecemeal, run `nightcrew install-skill` once), just describe the task to Claude Code in plain language: type `/nightcrew migrate the gift module and make the tests pass`, or simply say "queue this for tonight". The overnight run is a **fresh session with no memory of this conversation**, so the skill distills your request to its essentials and rewrites it into a self-contained prompt before queueing:
+
+- **Goal** — what to do, in one line
+- **Scope** — the exact files/modules, as absolute paths pulled from the conversation
+- **Done criteria** — how "done" is checked (a test passes, a build succeeds)
+- **Constraints** — what not to touch (e.g. "don't change the public API")
+
+It shows you the rewritten prompt, then queues it — you think in natural language, the queue stores something a memory-less session can actually execute.
+
+**By CLI.** When you'd rather write the prompt yourself:
+
+```bash
+nightcrew add "<a self-contained prompt>" --repo <path>
+```
+
 ## How it works
 
 Each task moves through a small state machine, persisted in `~/.config/nightcrew/queue.json`:
@@ -151,6 +170,18 @@ tree. Recommendations:
   passes that flag itself.
 - Review unattended work like you would review a teammate's overnight PR: `git diff` first,
   `nightcrew logs <task-id>` when something looks odd.
+
+## Working protocol (optional)
+
+Give the overnight agent a consistent method with `append_system_prompt`: nightcrew injects it via `--append-system-prompt` on **every** run, so each task follows the same discipline without you repeating it in every prompt. A protocol worth starting from:
+
+```json
+{
+  "append_system_prompt": "Before coding, read the repo's own rules (CLAUDE.md / .claude) and follow them. Reduce the task to first principles and restate the goal. No filler or narration — act on facts in the code, not assumptions. Plan, then implement, then verify with a build and tests before declaring done. Stay strictly on task; do not drift into unrelated changes."
+}
+```
+
+Claude Code already auto-loads a repo's `CLAUDE.md`, so project rules apply even without this — the protocol just makes the agent's method explicit and repeatable. It ships unset (no default); set it when you want every run held to the same bar.
 
 ## Scheduling window and interaction reserve
 
