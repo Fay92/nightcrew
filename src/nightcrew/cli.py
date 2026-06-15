@@ -1,8 +1,8 @@
 """Command line interface for nightcrew.
 
 Subcommands: add, list, status, daemon, run-once, logs, remove, retry,
-clean, doctor, install-service, uninstall-service, install-skill, setup,
-worktrees.
+clean, web, doctor, install-service, uninstall-service, install-skill,
+setup, worktrees.
 """
 
 from __future__ import annotations
@@ -347,6 +347,11 @@ def cmd_clean(args: argparse.Namespace, config: Config) -> int:
     return 0
 
 
+def cmd_web(args: argparse.Namespace, config: Config) -> int:
+    from . import web
+    return web.serve(config, port=args.port, open_browser=not args.no_browser)
+
+
 # ---------------------------------------------------------------------------
 # Parser
 # ---------------------------------------------------------------------------
@@ -496,6 +501,19 @@ def build_parser() -> argparse.ArgumentParser:
         "startup and once a day; run it by hand to reclaim space now.",
     )
     p_clean.set_defaults(func=cmd_clean)
+
+    p_web = sub.add_parser(
+        "web",
+        help="open a local web UI to browse tasks and read logs",
+        description="Start a local (127.0.0.1) web viewer: list tasks, read a "
+        "task's log rendered readably, and delete tasks. Auto-opens your "
+        "browser; press Ctrl-C to stop.",
+    )
+    p_web.add_argument("--port", type=int, default=8787,
+                       help="port to serve on (default 8787; 0 picks a free one)")
+    p_web.add_argument("--no-browser", action="store_true",
+                       help="do not auto-open the browser")
+    p_web.set_defaults(func=cmd_web)
 
     p_doctor = sub.add_parser(
         "doctor",
