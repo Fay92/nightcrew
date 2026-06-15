@@ -122,25 +122,25 @@ def test_build_plist_shape():
     from ccnight.service import build_plist, LABEL
 
     p = build_plist(
-        ccnight_bin="/usr/local/bin/ccnight", window="22:00-08:00", reserve=None,
+        ccnight_bin="/usr/local/bin/ccnight",
         home=Path("/home/x/.config/ccnight"), log_path=Path("/home/x/.config/ccnight/daemon.log"),
         path_env="/usr/bin:/bin",
     )
     assert p["Label"] == LABEL
-    assert p["ProgramArguments"] == ["/usr/local/bin/ccnight", "daemon", "--window", "22:00-08:00"]
+    # plist is stable; schedule lives in config.json, not the service args
+    assert p["ProgramArguments"] == ["/usr/local/bin/ccnight", "daemon"]
     assert p["RunAtLoad"] is True
     assert p["KeepAlive"] == {"SuccessfulExit": False}
     assert p["EnvironmentVariables"]["CCNIGHT_HOME"] == "/home/x/.config/ccnight"
     assert p["EnvironmentVariables"]["PYTHONUNBUFFERED"] == "1"
 
 
-def test_build_plist_includes_reserve_when_set():
-    from pathlib import Path
-    from ccnight.service import build_plist
-
-    p = build_plist(
-        ccnight_bin="ccnight", window=None, reserve=20,
-        home=Path("/h"), log_path=Path("/h/log"), path_env="",
-    )
-    assert "--reserve" in p["ProgramArguments"]
-    assert "--window" not in p["ProgramArguments"]
+def test_merge_config_preserves_existing(tmp_path):
+    import json
+    from ccnight.service import _merge_config
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps({"notify_command": "x", "window": "23:00-07:00"}))
+    _merge_config(p, {"window": "22:00-08:00"})
+    data = json.loads(p.read_text())
+    assert data["window"] == "22:00-08:00"   # updated
+    assert data["notify_command"] == "x"     # preserved

@@ -268,3 +268,31 @@ def test_timeout_kills_orphaned_child(config, repo, tmp_path, monkeypatch):
         except ProcessLookupError:
             pass
     assert not alive, "grandchild survived the timeout (orphan leak)"
+
+
+def test_model_flag_injected_by_default(config):
+    from ccnight.runner import build_command
+    task = make_task("/tmp")
+    cmd = build_command(config, task, resume=False)
+    assert cmd[cmd.index("--model") + 1] == config.model
+
+
+def test_stall_watchdog_kills_silent_task(config, repo, tmp_path):
+    """A task that emits nothing then hangs must be killed as stalled, fast."""
+    stub = tmp_path / "claude_silent"
+    stub.write_text(
+        "#!/usr/bin/env python3\n"
+        "import time\n"
+        "time.sleep(30)\n"  # never prints stream-json, just hangs
+    )
+    stub.chmod(0o755)
+    config.claude_bin = str(stub)
+    config.stall_timeout_seconds = 1
+    config.task_timeout_seconds = None  # isolate the stall path
+    import time as _t
+    t0 = _t.monotonic()
+    outcome = runner.run_task(config, make_task(repo))
+    elapsed = _t.monotonic() - t0
+    assert outcome.status == runner.FAILED
+    assert "stalled" in outcome.detail
+    assert elapsed < 10  # killed quickly, not after the full 30s

@@ -382,3 +382,44 @@ def test_future_reset_is_respected_as_is():
     task.blocked_at = now.isoformat()
     task.reset_at = future_reset
     assert _next_wake_for_blocked(task, now) == dt.datetime.fromisoformat(future_reset)
+
+
+def test_preflight_holds_when_failing(config, monkeypatch):
+    """A failing preflight must hold the task (stay pending), not run it."""
+    from ccnight import daemon as scheduler
+    from ccnight.queue import TaskQueue
+
+    config.preflight_command = "exit 1"  # always fails
+    monkeypatch.setattr("ccnight.daemon._preflight_ok", lambda c: False)
+    ran = {"n": 0}
+    monkeypatch.setattr(scheduler.runner, "run_task",
+                        lambda *a, **k: ran.__setitem__("n", ran["n"] + 1))
+    q = TaskQueue(config.home)
+    q.add("job", "/tmp")
+    scheduler.run_daemon(config, window=None, reserve=None, caffeinate=False,
+                         max_loops=2, idle_seconds=0, poll_seconds=0)
+    assert ran["n"] == 0                       # never ran
+    assert q.all()[0].status == "pending"      # held, not failed
+
+
+def test_window_close_notifies_unfinished(config, monkeypatch):
+    from ccnight.daemon import _preflight_ok  # noqa: ensure import path
+    from ccnight.daemon import TimeWindow
+    import ccnight.daemon as scheduler
+    from ccnight.queue import TaskQueue
+    import datetime as dt
+
+    calls = []
+    monkeypatch.setattr("ccnight.daemon.notify",
+                        lambda c, t, m: calls.append((t, m)))
+    # force "now" outside a window that we pretend we were just inside
+    q = TaskQueue(config.home)
+    q.add("leftover", "/tmp")
+    # window 22:00-08:00; pick a daytime now -> outside
+    win = scheduler.parse_window("22:00-08:00")
+    # local 14:00 (naive -> attach local tz, keeps the wall-clock time)
+    monkeypatch.setattr("ccnight.daemon.local_now",
+                        lambda: dt.datetime(2026, 6, 15, 14, 0).astimezone())
+    scheduler.run_daemon(config, window=win, reserve=None, caffeinate=False,
+                         max_loops=1, idle_seconds=0, poll_seconds=0)
+    assert any("window closed" in t for t, _ in calls)

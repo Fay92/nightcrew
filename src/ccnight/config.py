@@ -39,6 +39,24 @@ class Config:
     home: Path
     # Claude CLI executable. Override when claude is not on PATH.
     claude_bin: str = "claude"
+    # Model passed as --model on every run. Defaults to Opus so unattended work
+    # gets the strongest model; the interactive default (which may be a 1M or
+    # preview model id that headless rejects) is deliberately NOT inherited.
+    # Set to "" to inherit the CLI default instead.
+    model: str = "claude-opus-4-8"
+    # Nightly run window "HH:MM-HH:MM" (may cross midnight). The daemon reads
+    # this when --window is not passed on the command line.
+    window: str | None = None
+    # Interaction reserve percent (keep this much of the 5h window for yourself,
+    # needs ccusage). Read when --reserve is not passed on the command line.
+    reserve: int | None = None
+    # Optional preflight command run before every claude call (e.g. an IP/VPN
+    # check). Non-zero exit refuses that run instead of risking it. Keeps the
+    # guard working under launchd, where the interactive shell wrapper is absent.
+    preflight_command: str | None = None
+    # Stall watchdog: if a running task produces no new log output for this many
+    # seconds it is considered hung, killed, and the daemon moves on. None = off.
+    stall_timeout_seconds: int | None = 1200
     # Passed as --permission-mode unless the task's claude_args already set
     # one. Use an empty string to never pass the flag.
     permission_mode: str = "acceptEdits"
@@ -114,6 +132,11 @@ class Config:
             return cfg
         for key in (
             "claude_bin",
+            "model",
+            "window",
+            "reserve",
+            "preflight_command",
+            "stall_timeout_seconds",
             "permission_mode",
             "continue_prompt",
             "append_system_prompt",

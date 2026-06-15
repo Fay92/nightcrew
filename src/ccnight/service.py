@@ -25,17 +25,14 @@ def plist_path() -> Path:
 
 
 def build_plist(
-    *, ccnight_bin: str, window: str | None, reserve: int | None,
-    home: Path, log_path: Path, path_env: str,
+    *, ccnight_bin: str, home: Path, log_path: Path, path_env: str,
 ) -> dict:
-    args = [ccnight_bin, "daemon"]
-    if window:
-        args += ["--window", window]
-    if reserve is not None:
-        args += ["--reserve", str(reserve)]
+    # The daemon reads window/reserve/model/etc from config.json, so the plist
+    # is stable: changing your schedule means editing config.json, not the
+    # service definition.
     return {
         "Label": LABEL,
-        "ProgramArguments": args,
+        "ProgramArguments": [ccnight_bin, "daemon"],
         "RunAtLoad": True,
         # Restart the daemon if it ever exits abnormally (crash, OOM); a clean
         # exit (the user ran `ccnight uninstall-service`) is left alone.
@@ -70,9 +67,18 @@ def install(config: Config, *, window: str | None, reserve: int | None) -> int:
 
     ccnight_bin = shutil.which("ccnight") or os.path.abspath(sys.argv[0])
     config.ensure_dirs()
+    # Persist schedule into config.json so it stays the single source of truth.
+    updates = {}
+    if window is not None:
+        updates["window"] = window
+    if reserve is not None:
+        updates["reserve"] = reserve
+    if updates:
+        _merge_config(config.config_path, updates)
+
     log_path = config.home / "daemon.log"
     plist = build_plist(
-        ccnight_bin=ccnight_bin, window=window, reserve=reserve,
+        ccnight_bin=ccnight_bin,
         home=config.home, log_path=log_path, path_env=os.environ.get("PATH", ""),
     )
     target = plist_path()
@@ -92,12 +98,28 @@ def install(config: Config, *, window: str | None, reserve: int | None) -> int:
 
     loaded = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
     ok = LABEL in loaded.stdout
+    effective = Config.load(home=config.home)
     print(f"ccnight: service installed ({target})")
     print(f"  status:  {'loaded and running' if ok else 'written but not visible in launchctl list'}")
-    print(f"  window:  {window or 'always'}")
+    print(f"  window:  {effective.window or 'always'} (edit config.json to change)")
     print(f"  logs:    {log_path}")
     print("  the daemon now starts on login and stays running - just `ccnight add`.")
     return 0 if ok else 1
+
+
+def _merge_config(path: Path, updates: dict) -> None:
+    """Merge *updates* into the JSON config file, preserving existing keys."""
+    import json
+    data: dict = {}
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                data = {}
+        except (OSError, json.JSONDecodeError):
+            data = {}
+    data.update(updates)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def uninstall() -> int:

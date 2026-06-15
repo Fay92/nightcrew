@@ -49,6 +49,8 @@ POLL_SECONDS = 30
 IDLE_POLL_SECONDS = 120
 PROBE_INTERVAL = timedelta(minutes=30)
 RESERVE_RECHECK_SECONDS = 300
+# How long to wait before retrying after a failed preflight (IP/VPN not ready).
+PREFLIGHT_RETRY_SECONDS = 120
 # Floor between two resume attempts. Guards against a "resume storm": if a
 # limit message parses to a reset time in the past (timezone slip, boundary),
 # we still wait at least this long instead of hammering the API in a loop.
@@ -497,17 +499,41 @@ def run_daemon(
     last_logged = ""
     loops = 0
     batch: list[Task] = []
+    was_in_window = True  # for window-close edge detection
     try:
         while max_loops is None or loops < max_loops:
             loops += 1
             tasks = queue.all()
             now = local_now()
+
+            # Window-close notification: when the run window ends with tasks
+            # still unfinished, tell the user (req: "notify if not done by end").
+            in_window = window is None or window.contains(now.time())
+            if window is not None and was_in_window and not in_window:
+                unfinished = [t for t in tasks if t.status in
+                              (STATUS_PENDING, STATUS_RUNNING, STATUS_BLOCKED_LIMIT)]
+                if unfinished:
+                    notify(config, "ccnight: window closed",
+                           f"{len(unfinished)} task(s) still unfinished when the "
+                           f"{window} window ended")
+            was_in_window = in_window
+
             usage = estimate_usage_percent() if reserve is not None else None
             decision = decide(
                 tasks, now=now, window=window, reserve=reserve, usage_percent=usage
             )
 
             if decision.action in (ACTION_RUN, ACTION_RESUME):
+                # Preflight gate (e.g. IP/VPN check): on failure, hold the task
+                # in the queue and retry shortly -- never fail it for a transient
+                # network/egress condition.
+                if config.preflight_command and not _preflight_ok(config):
+                    msg = "[daemon] preflight failed, holding queue (will retry)"
+                    if msg != last_logged:
+                        print(msg)
+                        last_logged = msg
+                    time.sleep(min(poll_seconds, PREFLIGHT_RETRY_SECONDS))
+                    continue
                 last_logged = ""
                 task = decision.task
                 assert task is not None
@@ -561,6 +587,20 @@ def run_daemon(
         except OSError:
             pass
     return 0
+
+
+def _preflight_ok(config: Config) -> bool:
+    """Run the configured preflight command; True if it exits 0 (or none set)."""
+    if not config.preflight_command:
+        return True
+    try:
+        result = subprocess.run(
+            config.preflight_command, shell=True,
+            capture_output=True, timeout=60,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
 
 def _start_caffeinate() -> subprocess.Popen | None:

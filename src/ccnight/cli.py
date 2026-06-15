@@ -127,19 +127,21 @@ def cmd_status(args: argparse.Namespace, config: Config) -> int:
 
 def cmd_daemon(args: argparse.Namespace, config: Config) -> int:
     window = None
-    if args.window:
+    window_str = args.window or config.window  # --window overrides config file
+    if window_str:
         try:
-            window = scheduler.parse_window(args.window)
+            window = scheduler.parse_window(window_str)
         except ValueError as exc:
             print(f"ccnight: error: {exc}", file=sys.stderr)
             return 2
-    if args.reserve is not None and not 0 <= args.reserve <= 99:
-        print("ccnight: error: --reserve must be between 0 and 99", file=sys.stderr)
+    reserve = args.reserve if args.reserve is not None else config.reserve
+    if reserve is not None and not 0 <= reserve <= 99:
+        print("ccnight: error: reserve must be between 0 and 99", file=sys.stderr)
         return 2
     return scheduler.run_daemon(
         config,
         window=window,
-        reserve=args.reserve,
+        reserve=reserve,
         dry=args.dry_run,
         caffeinate=not args.no_caffeinate,
     )
@@ -195,9 +197,14 @@ def cmd_doctor(args: argparse.Namespace, config: Config) -> int:
           + ("" if config.config_path.exists() else "  (none yet, using defaults)"))
     claude_path = shutil.which(config.claude_bin)
     print(f"  claude binary:   {claude_path or config.claude_bin + ' (NOT FOUND on PATH)'}")
+    print(f"  model:           {config.model or '(CLI default)'}")
+    print(f"  window:          {config.window or 'always (no window set)'}")
+    print(f"  preflight:       {config.preflight_command or '(none)'}")
     print(f"  permission mode: {config.permission_mode or '(none)'}")
     timeout = f"{config.task_timeout_seconds}s" if config.task_timeout_seconds else "none"
     print(f"  task timeout:    {timeout}")
+    stall = f"{config.stall_timeout_seconds}s (kill if no output)" if config.stall_timeout_seconds else "off"
+    print(f"  stall watchdog:  {stall}")
     if config.append_system_prompt:
         first = config.append_system_prompt.strip().splitlines()[0]
         print(f"  work protocol:   on ({first[:50]}...)")

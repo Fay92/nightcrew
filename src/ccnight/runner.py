@@ -19,6 +19,7 @@ import signal
 import shlex
 import subprocess
 import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -88,6 +89,8 @@ def build_command(config: Config, task: Task, *, resume: bool) -> list[str]:
         cmd.append(task.prompt)
     cmd += ["--output-format", "stream-json", "--verbose"]
     user_args = shlex.split(task.claude_args) if task.claude_args else []
+    if config.model and "--model" not in user_args:
+        cmd += ["--model", config.model]
     if config.permission_mode and "--permission-mode" not in user_args:
         cmd += ["--permission-mode", config.permission_mode]
     if config.append_system_prompt and "--append-system-prompt" not in user_args:
@@ -179,10 +182,29 @@ def run_task(config: Config, task: Task) -> RunOutcome:
         watchdog.daemon = True
         watchdog.start()
 
+    # Stall watchdog: if no new output arrives for stall_timeout_seconds the
+    # task is hung (or spinning silently) -- kill it so the daemon moves on.
+    stalled = threading.Event()
+    last_output = [time.monotonic()]
+    stall_stop = threading.Event()
+    stall_seconds = config.stall_timeout_seconds
+    if stall_seconds:
+
+        def _stall_monitor() -> None:
+            tick = max(5.0, min(30.0, stall_seconds / 4))
+            while not stall_stop.wait(tick):
+                if time.monotonic() - last_output[0] > stall_seconds:
+                    stalled.set()
+                    _kill_process_tree(proc)
+                    return
+
+        threading.Thread(target=_stall_monitor, daemon=True).start()
+
     with open(log_path, "a", encoding="utf-8") as log:
         _meta(log, "run", command=cmd, resume=resume, task_id=task.id)
         assert proc.stdout is not None
         for raw_line in proc.stdout:
+            last_output[0] = time.monotonic()
             line = raw_line.rstrip("\n")
             if not line.strip():
                 continue
@@ -210,6 +232,7 @@ def run_task(config: Config, task: Task) -> RunOutcome:
         returncode = proc.wait()
         if watchdog is not None:
             watchdog.cancel()
+        stall_stop.set()
         stderr_thread.join(timeout=5)
         for line in stderr_lines:
             if line.strip():
@@ -223,6 +246,7 @@ def run_task(config: Config, task: Task) -> RunOutcome:
             suspicious=suspicious,
             session_id=session_id,
             timed_out=timed_out.is_set(),
+            stalled=stalled.is_set(),
         )
         _meta(
             log,
@@ -243,7 +267,15 @@ def _classify(
     suspicious: list[str],
     session_id: str | None,
     timed_out: bool,
+    stalled: bool = False,
 ) -> RunOutcome:
+    if stalled:
+        return RunOutcome(
+            FAILED,
+            session_id,
+            None,
+            f"stalled: no output for {config.stall_timeout_seconds}s, killed and skipped",
+        )
     if timed_out:
         return RunOutcome(
             FAILED,
