@@ -1,21 +1,21 @@
-"""Shared fixtures: isolated ccnight home + fake claude binary."""
+"""Shared fixtures: isolated nightcrew home + fake claude binary."""
 
 import os
 from pathlib import Path
 
 import pytest
 
-from ccnight.config import Config
+from nightcrew.config import Config
 
 FAKES_DIR = Path(__file__).parent / "fakes"
 FAKE_CLAUDE = FAKES_DIR / "claude"
 
 
 @pytest.fixture
-def ccnight_home(tmp_path, monkeypatch):
-    """Point CCNIGHT_HOME at a temp dir so tests never touch real state."""
-    home = tmp_path / "ccnight-home"
-    monkeypatch.setenv("CCNIGHT_HOME", str(home))
+def nightcrew_home(tmp_path, monkeypatch):
+    """Point NIGHTCREW_HOME at a temp dir so tests never touch real state."""
+    home = tmp_path / "nightcrew-home"
+    monkeypatch.setenv("NIGHTCREW_HOME", str(home))
     for var in (
         "FAKE_CLAUDE_MODE",
         "FAKE_CLAUDE_SESSION_ID",
@@ -34,8 +34,8 @@ def fake_claude():
 
 
 @pytest.fixture
-def config(ccnight_home, fake_claude):
-    cfg = Config.load(home=ccnight_home)
+def config(nightcrew_home, fake_claude):
+    cfg = Config.load(home=nightcrew_home)
     cfg.claude_bin = fake_claude
     cfg.ensure_dirs()
     return cfg

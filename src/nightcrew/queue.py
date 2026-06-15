@@ -2,7 +2,7 @@
 
 The queue lives at ``<home>/queue.json``. Every read-modify-write cycle
 takes an exclusive advisory lock on ``<home>/queue.lock`` so that
-``ccnight add`` and the daemon can never corrupt the file by writing
+``nightcrew add`` and the daemon can never corrupt the file by writing
 concurrently. Writes are atomic (temp file + ``os.replace``).
 
 Stdlib only: ``fcntl.flock`` on POSIX, ``msvcrt.locking`` on Windows.

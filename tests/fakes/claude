@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fake Claude Code CLI for ccnight integration tests.
+"""Fake Claude Code CLI for nightcrew integration tests.
 
 Behaviour is selected with environment variables:
 
@@ -7,7 +7,7 @@ Behaviour is selected with environment variables:
   FAKE_CLAUDE_SESSION_ID  session id to advertise (default: fake-sess-0001)
   FAKE_CLAUDE_LIMIT_TEXT  limit message for the limit modes
   FAKE_CLAUDE_ARGS_FILE   when set, argv is dumped there as JSON so tests can
-                          assert exactly how ccnight invoked the CLI
+                          assert exactly how nightcrew invoked the CLI
 
 Scenarios:
   ok          valid stream-json: init -> assistant -> result(success), exit 0

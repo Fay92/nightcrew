@@ -1,40 +1,40 @@
-# ccnight
+# nightcrew
 
 **Quota-aware task queue for Claude Code — use the quota you already paid for while you sleep.**
 
 ![status](https://img.shields.io/badge/status-alpha-orange) ![python](https://img.shields.io/badge/python-3.11%2B-blue) ![deps](https://img.shields.io/badge/runtime%20deps-zero-brightgreen) ![license](https://img.shields.io/badge/license-MIT-green)
 
-Queue up coding tasks in the evening. While you sleep, `ccnight` runs them one by one through the official `claude` CLI in headless mode. When it hits your usage limit, it parses the reset time, pauses, and resumes the **same session** the moment your quota window resets. When everything is done (or stuck), it notifies you.
+Queue up coding tasks in the evening. While you sleep, `nightcrew` runs them one by one through the official `claude` CLI in headless mode. When it hits your usage limit, it parses the reset time, pauses, and resumes the **same session** the moment your quota window resets. When everything is done (or stuck), it notifies you.
 
 ```
-9pm   ccnight add "migrate the test suite to pytest" --repo ~/code/app
-9pm   ccnight add "write API docs for the v2 endpoints" --repo ~/code/app
-9pm   ccnight daemon --window "23:00-08:00" --reserve 20
+9pm   nightcrew add "migrate the test suite to pytest" --repo ~/code/app
+9pm   nightcrew add "write API docs for the v2 endpoints" --repo ~/code/app
+9pm   nightcrew daemon --window "23:00-08:00" --reserve 20
 3am   [usage limit hit -> parsed "resets 6am" -> sleeping]
 6am   [limit reset -> resuming session...]
-8am   macOS notification: "ccnight: task done"
+8am   macOS notification: "nightcrew: task done"
 ```
 
 ## Why
 
 If you pay for Claude Pro or Max, your 5-hour usage windows keep refilling around the clock — including the eight hours you spend asleep. That quota is part of what you pay for, and it evaporates unused.
 
-This is one of the most-requested Claude Code features: [anthropics/claude-code#13354](https://github.com/anthropics/claude-code/issues/13354) (queued tasks / auto-resume after usage limits, 100+ upvotes, open for months with no official solution). The existing workarounds are one-off hacks: tmux keystroke injectors, personal gists, stop-hook experiments. `ccnight` is the missing piece as a real tool: a persistent multi-task queue, limit-aware scheduling, session resume, and completion notifications.
+This is one of the most-requested Claude Code features: [anthropics/claude-code#13354](https://github.com/anthropics/claude-code/issues/13354) (queued tasks / auto-resume after usage limits, 100+ upvotes, open for months with no official solution). The existing workarounds are one-off hacks: tmux keystroke injectors, personal gists, stop-hook experiments. `nightcrew` is the missing piece as a real tool: a persistent multi-task queue, limit-aware scheduling, session resume, and completion notifications.
 
 ## Compliance
 
-> **ccnight does NOT bypass any rate limit, does NOT rotate accounts, and does NOT proxy subscriptions.**
+> **nightcrew does NOT bypass any rate limit, does NOT rotate accounts, and does NOT proxy subscriptions.**
 >
 > It only *schedules* work you already paid for — exactly like setting an alarm clock. It drives the official `claude` CLI under your own single login, fully respects every limit it encounters, and simply waits until your quota window resets before continuing. Nothing more.
 
 ## Install
 
 ```bash
-pipx install ccnight            # once published to PyPI
+pipx install nightcrew            # once published to PyPI
 # until then, from source:
-pipx install git+https://github.com/ccnight/ccnight
+pipx install git+https://github.com/nightcrew/nightcrew
 # or for development:
-git clone https://github.com/ccnight/ccnight && cd ccnight && pip install -e ".[dev]"
+git clone https://github.com/nightcrew/nightcrew && cd nightcrew && pip install -e ".[dev]"
 ```
 
 Requirements: Python 3.11+, the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) logged in with your subscription. Zero third-party runtime dependencies (stdlib only).
@@ -43,28 +43,28 @@ Requirements: Python 3.11+, the [Claude Code CLI](https://docs.anthropic.com/en/
 
 ```bash
 # 1. queue tasks
-ccnight add "refactor the auth module and make all tests pass" --repo ~/code/app
-ccnight add "add input validation to every public endpoint" --repo ~/code/api \
+nightcrew add "refactor the auth module and make all tests pass" --repo ~/code/app
+nightcrew add "add input validation to every public endpoint" --repo ~/code/api \
     --claude-args "--model claude-sonnet-4-5"
 
 # 2. inspect the queue
-ccnight list
-ccnight status
+nightcrew list
+nightcrew status
 
 # 3. see what the scheduler would do, without calling claude
-ccnight daemon --dry-run
+nightcrew daemon --dry-run
 
 # 4. run the scheduler (foreground; keep it in tmux/launchd)
-ccnight daemon --window "00:00-08:00" --reserve 20
+nightcrew daemon --window "00:00-08:00" --reserve 20
 
 # debugging helpers
-ccnight run-once <task-id>      # run one task right now
-ccnight logs <task-id>          # dump the captured stream-json log
+nightcrew run-once <task-id>      # run one task right now
+nightcrew logs <task-id>          # dump the captured stream-json log
 ```
 
 ## How it works
 
-Each task moves through a small state machine, persisted in `~/.config/ccnight/queue.json`:
+Each task moves through a small state machine, persisted in `~/.config/nightcrew/queue.json`:
 
 ```
                        ┌────────────────────────────────────────────┐
@@ -83,7 +83,7 @@ Each task moves through a small state machine, persisted in `~/.config/ccnight/q
 
 - **Run**: the daemon picks the oldest pending task and runs
   `claude -p "<prompt>" --output-format stream-json --verbose` inside the task's repo,
-  streaming the full transcript to `~/.config/ccnight/logs/<task-id>.jsonl` and capturing the session id.
+  streaming the full transcript to `~/.config/nightcrew/logs/<task-id>.jsonl` and capturing the session id.
 - **Hit the wall**: limit messages are detected in error output (multiple known formats, see
   *Known limitations*), the reset time is parsed when present, and the whole queue pauses —
   a usage limit is account-wide, so starting another task would just hit the same wall.
@@ -98,7 +98,7 @@ Each task moves through a small state machine, persisted in `~/.config/ccnight/q
 
 **Read this section before queueing anything.**
 
-Headless runs cannot ask you for confirmation, so by default ccnight passes
+Headless runs cannot ask you for confirmation, so by default nightcrew passes
 `--permission-mode acceptEdits`: Claude may create and edit files inside the task repo
 without prompting, but actions outside that mode (e.g. arbitrary shell commands not
 covered by your allowlist) still fail rather than silently proceed.
@@ -131,19 +131,19 @@ tree. Recommendations:
 
 - **Overriding the default**: anything you pass via `--claude-args` wins. For example
   `--claude-args "--permission-mode plan"` for a read-only planning run, or — if you fully
-  understand the risk — `--claude-args "--dangerously-skip-permissions"`. ccnight never
+  understand the risk — `--claude-args "--dangerously-skip-permissions"`. nightcrew never
   passes that flag itself.
 - Review unattended work like you would review a teammate's overnight PR: `git diff` first,
-  `ccnight logs <task-id>` when something looks odd.
+  `nightcrew logs <task-id>` when something looks odd.
 
 ## Scheduling window and interaction reserve
 
-Two independent, optional mechanisms keep ccnight from eating the quota you want for
+Two independent, optional mechanisms keep nightcrew from eating the quota you want for
 yourself:
 
 1. **Time window** (`--window "00:00-08:00"`): the queue only runs inside this daily window
    (it may cross midnight, e.g. `23:00-07:00`). Outside it, the daemon just waits. This is
-   the simple, dependency-free option: give ccnight the hours when you sleep.
+   the simple, dependency-free option: give nightcrew the hours when you sleep.
 
 2. **Usage reserve** (`--reserve 20`): keep N% of the current 5-hour window for interactive
    use. If [ccusage](https://github.com/ryoppippi/ccusage) is available (`ccusage` on PATH,
@@ -164,19 +164,19 @@ Both are off by default; combine them as you like.
   point it at Slack, Discord, ntfy.sh, Feishu, or your own endpoint:
 
   ```json
-  {"source": "ccnight", "title": "ccnight: task done", "message": "[1a2b3c4d] refactor...", "timestamp": "2026-06-11T07:58:00+00:00"}
+  {"source": "nightcrew", "title": "nightcrew: task done", "message": "[1a2b3c4d] refactor...", "timestamp": "2026-06-11T07:58:00+00:00"}
   ```
 
 ## Configuration
 
-`~/.config/ccnight/config.json` (all keys optional):
+`~/.config/nightcrew/config.json` (all keys optional):
 
 ```json
 {
   "claude_bin": "claude",
   "permission_mode": "acceptEdits",
   "continue_prompt": "continue",
-  "webhook_url": "https://hooks.example.com/ccnight",
+  "webhook_url": "https://hooks.example.com/nightcrew",
   "extra_limit_patterns": ["my org's custom limit message"],
   "task_timeout_seconds": null
 }
@@ -192,12 +192,12 @@ Both are off by default; combine them as you like.
 | `task_timeout_seconds` | `null` | hard kill switch for a single run (null = unlimited) |
 
 State lives in the same directory: `queue.json`, `logs/<task-id>.jsonl`, `daemon.pid`.
-Set `CCNIGHT_HOME` to relocate everything.
+Set `NIGHTCREW_HOME` to relocate everything.
 
 ## Running as a service (launchd)
 
 The daemon is a plain foreground process by design — put it under your favorite supervisor.
-macOS example, `~/Library/LaunchAgents/com.ccnight.daemon.plist`:
+macOS example, `~/Library/LaunchAgents/com.nightcrew.daemon.plist`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -205,10 +205,10 @@ macOS example, `~/Library/LaunchAgents/com.ccnight.daemon.plist`:
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.ccnight.daemon</string>
+  <key>Label</key><string>com.nightcrew.daemon</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/YOU/.local/bin/ccnight</string>
+    <string>/Users/YOU/.local/bin/nightcrew</string>
     <string>daemon</string>
     <string>--window</string>
     <string>00:00-08:00</string>
@@ -217,24 +217,24 @@ macOS example, `~/Library/LaunchAgents/com.ccnight.daemon.plist`:
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>/tmp/ccnight.daemon.log</string>
-  <key>StandardErrorPath</key><string>/tmp/ccnight.daemon.log</string>
+  <key>StandardOutPath</key><string>/tmp/nightcrew.daemon.log</string>
+  <key>StandardErrorPath</key><string>/tmp/nightcrew.daemon.log</string>
 </dict>
 </plist>
 ```
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.ccnight.daemon.plist
+launchctl load ~/Library/LaunchAgents/com.nightcrew.daemon.plist
 ```
 
-Or just: `tmux new -s ccnight 'ccnight daemon --window "00:00-08:00"'`.
+Or just: `tmux new -s nightcrew 'nightcrew daemon --window "00:00-08:00"'`.
 
 ## Known limitations
 
 - **Limit-message coverage is evolving.** Claude Code's wall messages vary across versions
-  and limit types; ccnight ships patterns for the publicly reported formats, but
+  and limit types; nightcrew ships patterns for the publicly reported formats, but
   battle-tested format coverage is evolving. When a message is detected but its reset time
-  cannot be parsed, ccnight falls back to a 30-minute probe loop — slower, but safe. If you
+  cannot be parsed, nightcrew falls back to a 30-minute probe loop — slower, but safe. If you
   see an unrecognized message, add a regex to `extra_limit_patterns` and please open an
   issue with the exact text.
 - **Reset times are only knowable after hitting the wall.** The CLI does not expose the next

@@ -9,8 +9,8 @@ import json
 
 import pytest
 
-from ccnight import runner
-from ccnight.queue import Task
+from nightcrew import runner
+from nightcrew.queue import Task
 
 
 def make_task(repo, **kw):
@@ -45,8 +45,8 @@ def test_successful_run(config, repo, monkeypatch):
     types = [l.get("type") for l in lines]
     assert "system" in types  # raw stream-json passthrough
     assert "result" in types
-    assert types[0] == "ccnight.run"  # run metadata header
-    assert types[-1] == "ccnight.outcome"
+    assert types[0] == "nightcrew.run"  # run metadata header
+    assert types[-1] == "nightcrew.outcome"
 
 
 def test_limit_via_error_result_event(config, repo, monkeypatch):
@@ -150,8 +150,8 @@ def test_resume_invocation_reaches_claude(config, repo, tmp_path, monkeypatch):
 
 
 def test_build_command_appends_config_extra_args(config):
-    from ccnight.queue import Task
-    from ccnight.runner import build_command
+    from nightcrew.queue import Task
+    from nightcrew.runner import build_command
 
     config.guardrails = False  # isolate the raw escape hatch
     config.claude_extra_args = '--disallowedTools "Bash(git commit:*)" "Bash(rm:*)"'
@@ -162,8 +162,8 @@ def test_build_command_appends_config_extra_args(config):
 
 
 def test_guardrails_on_by_default(config):
-    from ccnight.queue import Task
-    from ccnight.runner import build_command, DEFAULT_DENY_TOOLS, DEFAULT_ALLOW_TOOLS
+    from nightcrew.queue import Task
+    from nightcrew.runner import build_command, DEFAULT_DENY_TOOLS, DEFAULT_ALLOW_TOOLS
 
     task = Task(id="g1", prompt="do it", repo="/tmp", status="pending")
     cmd = build_command(config, task, resume=False)
@@ -176,8 +176,8 @@ def test_guardrails_on_by_default(config):
 
 
 def test_guardrails_can_be_disabled(config):
-    from ccnight.queue import Task
-    from ccnight.runner import build_command
+    from nightcrew.queue import Task
+    from nightcrew.runner import build_command
 
     config.guardrails = False
     task = Task(id="g2", prompt="x", repo="/tmp", status="pending")
@@ -186,8 +186,8 @@ def test_guardrails_can_be_disabled(config):
 
 
 def test_custom_allow_deny_override_defaults(config):
-    from ccnight.queue import Task
-    from ccnight.runner import build_command
+    from nightcrew.queue import Task
+    from nightcrew.runner import build_command
 
     config.allow_tools = ["Bash(./gradlew:*)", "Bash(custombuild:*)"]
     config.deny_tools = []
@@ -199,8 +199,8 @@ def test_custom_allow_deny_override_defaults(config):
 
 
 def test_task_claude_args_allowedtools_suppresses_builtin(config):
-    from ccnight.queue import Task
-    from ccnight.runner import build_command
+    from nightcrew.queue import Task
+    from nightcrew.runner import build_command
 
     task = Task(
         id="g4", prompt="x", repo="/tmp", status="pending",
@@ -213,8 +213,8 @@ def test_task_claude_args_allowedtools_suppresses_builtin(config):
 
 
 def test_append_system_prompt_injected(config):
-    from ccnight.queue import Task
-    from ccnight.runner import build_command
+    from nightcrew.queue import Task
+    from nightcrew.runner import build_command
 
     config.append_system_prompt = "Work protocol: analyse, plan, execute, self-check."
     task = Task(id="sp1", prompt="do it", repo="/tmp", status="pending")
@@ -224,8 +224,8 @@ def test_append_system_prompt_injected(config):
 
 
 def test_append_system_prompt_absent_by_default(config):
-    from ccnight.queue import Task
-    from ccnight.runner import build_command
+    from nightcrew.queue import Task
+    from nightcrew.runner import build_command
 
     task = Task(id="sp2", prompt="x", repo="/tmp", status="pending")
     assert "--append-system-prompt" not in build_command(config, task, resume=False)
@@ -271,7 +271,7 @@ def test_timeout_kills_orphaned_child(config, repo, tmp_path, monkeypatch):
 
 
 def test_model_flag_injected_by_default(config):
-    from ccnight.runner import build_command
+    from nightcrew.runner import build_command
     task = make_task("/tmp")
     cmd = build_command(config, task, resume=False)
     assert cmd[cmd.index("--model") + 1] == config.model

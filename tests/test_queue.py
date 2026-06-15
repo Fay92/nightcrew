@@ -5,7 +5,7 @@ import threading
 
 import pytest
 
-from ccnight.queue import (
+from nightcrew.queue import (
     STATUS_DONE,
     STATUS_PENDING,
     STATUS_RUNNING,
@@ -18,8 +18,8 @@ from ccnight.queue import (
 
 
 @pytest.fixture
-def queue(ccnight_home):
-    return TaskQueue(ccnight_home)
+def queue(nightcrew_home):
+    return TaskQueue(nightcrew_home)
 
 
 def test_add_and_roundtrip(queue):
@@ -115,10 +115,10 @@ def test_concurrent_adds_do_not_corrupt(queue):
     json.loads(queue.path.read_text())  # file must still be valid JSON
 
 
-def test_remove_by_prefix_and_unknown(ccnight_home):
-    from ccnight.queue import TaskNotFound, TaskQueue
+def test_remove_by_prefix_and_unknown(nightcrew_home):
+    from nightcrew.queue import TaskNotFound, TaskQueue
 
-    q = TaskQueue(ccnight_home)
+    q = TaskQueue(nightcrew_home)
     task = q.add("doomed", "/tmp")
     removed = q.remove(task.id[:4])
     assert removed.id == task.id
@@ -130,10 +130,10 @@ def test_remove_by_prefix_and_unknown(ccnight_home):
         pass
 
 
-def test_remove_running_requires_force(ccnight_home):
-    from ccnight.queue import STATUS_RUNNING, StaleTask, TaskQueue
+def test_remove_running_requires_force(nightcrew_home):
+    from nightcrew.queue import STATUS_RUNNING, StaleTask, TaskQueue
 
-    q = TaskQueue(ccnight_home)
+    q = TaskQueue(nightcrew_home)
     task = q.add("busy", "/tmp")
     q.update(task.id, status=STATUS_RUNNING)
     try:
@@ -144,10 +144,10 @@ def test_remove_running_requires_force(ccnight_home):
     assert q.remove(task.id, force=True).id == task.id
 
 
-def test_requeue_failed_resets_state(ccnight_home):
-    from ccnight.queue import TaskQueue, STATUS_FAILED, STATUS_PENDING
+def test_requeue_failed_resets_state(nightcrew_home):
+    from nightcrew.queue import TaskQueue, STATUS_FAILED, STATUS_PENDING
 
-    q = TaskQueue(ccnight_home)
+    q = TaskQueue(nightcrew_home)
     t = q.add("job", "/tmp")
     q.update(t.id, status=STATUS_FAILED, error="boom", session_id="s1",
              started_at="x", finished_at="y")

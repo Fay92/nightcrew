@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from ccnight import limits
+from nightcrew import limits
 
 # Fixed reference: 2026-06-11 22:00 in the machine-local timezone.
 NOW = dt.datetime(2026, 6, 11, 22, 0, 0).astimezone()

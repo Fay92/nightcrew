@@ -285,7 +285,7 @@ def decide(
 
 
 def limit_block_state(tasks: list[Task], now: datetime) -> tuple[bool, datetime | None]:
-    """Used by ``ccnight status``: (limit currently blocking?, next wake)."""
+    """Used by ``nightcrew status``: (limit currently blocking?, next wake)."""
     blocked = [t for t in tasks if t.status == STATUS_BLOCKED_LIMIT]
     if not blocked:
         return False, None
@@ -336,7 +336,7 @@ def apply_outcome(
             blocked_at=None,
             error=None,
         )
-        notify(config, "ccnight: task done", f"[{task.id}] {short_prompt}")
+        notify(config, "nightcrew: task done", f"[{task.id}] {short_prompt}")
     elif outcome.status == runner.HIT_LIMIT:
         reset_iso = outcome.reset_at.isoformat() if outcome.reset_at else None
         updated = queue.update(
@@ -352,7 +352,7 @@ def apply_outcome(
             message = f"queue paused, resuming at {when}"
         else:
             message = "queue paused, reset time unknown (probing every 30 min)"
-        notify(config, "ccnight: usage limit hit", message)
+        notify(config, "nightcrew: usage limit hit", message)
     else:
         updated = queue.update(
             task.id,
@@ -362,7 +362,7 @@ def apply_outcome(
             log_file=log_file,
             error=outcome.detail[:500],
         )
-        notify(config, "ccnight: task failed", f"[{task.id}] {outcome.detail[:120]}")
+        notify(config, "nightcrew: task failed", f"[{task.id}] {outcome.detail[:120]}")
     return updated
 
 
@@ -439,7 +439,7 @@ def dry_run(
     now = local_now()
     usage = estimate_usage_percent() if reserve is not None else None
 
-    print("ccnight daemon (dry-run)")
+    print("nightcrew daemon (dry-run)")
     print(f"  home:     {config.home}")
     print(f"  window:   {window if window else 'always (no --window)'}")
     if reserve is not None:
@@ -479,7 +479,7 @@ def run_daemon(
 
     existing = read_daemon_pid(config)
     if existing is not None:
-        print(f"ccnight: daemon already running (pid {existing})", file=sys.stderr)
+        print(f"nightcrew: daemon already running (pid {existing})", file=sys.stderr)
         return 1
     config.ensure_dirs()
     config.pid_path.write_text(str(os.getpid()))
@@ -513,7 +513,7 @@ def run_daemon(
                 unfinished = [t for t in tasks if t.status in
                               (STATUS_PENDING, STATUS_RUNNING, STATUS_BLOCKED_LIMIT)]
                 if unfinished:
-                    notify(config, "ccnight: window closed",
+                    notify(config, "nightcrew: window closed",
                            f"{len(unfinished)} task(s) still unfinished when the "
                            f"{window} window ended")
             was_in_window = in_window
@@ -549,7 +549,7 @@ def run_daemon(
                     continue  # someone else (run-once) grabbed it
                 verb = "resumed" if decision.action == ACTION_RESUME else "started"
                 short = claimed.prompt[:60] + ("..." if len(claimed.prompt) > 60 else "")
-                notify(config, f"ccnight: task {verb}", f"[{claimed.id}] {short}")
+                notify(config, f"nightcrew: task {verb}", f"[{claimed.id}] {short}")
                 outcome = runner.run_task(config, claimed)
                 applied = apply_outcome(config, queue, claimed, outcome)
                 if applied.status in (STATUS_DONE, STATUS_FAILED):
@@ -567,7 +567,7 @@ def run_daemon(
 
             if decision.action == ACTION_IDLE:
                 if batch:
-                    notify(config, "ccnight: night shift report", shift_report(batch))
+                    notify(config, "nightcrew: night shift report", shift_report(batch))
                     batch = []
                 sleep_for = idle_seconds
             elif decision.wake_at is not None:

@@ -68,7 +68,7 @@ def webhook_payload(url: str, fmt: str, title: str, message: str) -> dict:
     if fmt == "slack":
         return {"text": f"*{title}*\n{message}"}
     return {
-        "source": "ccnight",
+        "source": "nightcrew",
         "title": title,
         "message": message,
         "timestamp": utcnow_iso(),
@@ -76,7 +76,7 @@ def webhook_payload(url: str, fmt: str, title: str, message: str) -> dict:
 
 
 def _command(cmd: str, title: str, message: str) -> None:
-    env = {**os.environ, "CCNIGHT_TITLE": title, "CCNIGHT_MESSAGE": message}
+    env = {**os.environ, "NIGHTCREW_TITLE": title, "NIGHTCREW_MESSAGE": message}
     try:
         subprocess.run(
             cmd,
@@ -95,7 +95,7 @@ def _webhook(url: str, fmt: str, title: str, message: str) -> None:
     request = urllib.request.Request(
         url,
         data=payload,
-        headers={"Content-Type": "application/json", "User-Agent": "ccnight"},
+        headers={"Content-Type": "application/json", "User-Agent": "nightcrew"},
     )
     try:
         with urllib.request.urlopen(request, timeout=10):

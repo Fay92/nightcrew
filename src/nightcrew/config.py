@@ -1,10 +1,10 @@
 """Configuration loading and shared filesystem paths.
 
-All ccnight state lives under a single directory, resolved in this order:
+All nightcrew state lives under a single directory, resolved in this order:
 
-1. ``$CCNIGHT_HOME`` (also how the test suite isolates itself)
-2. ``$XDG_CONFIG_HOME/ccnight``
-3. ``~/.config/ccnight``
+1. ``$NIGHTCREW_HOME`` (also how the test suite isolates itself)
+2. ``$XDG_CONFIG_HOME/nightcrew``
+3. ``~/.config/nightcrew``
 
 User-tunable settings are read from ``<home>/config.json``. Unknown keys
 are ignored and a broken file falls back to defaults with a warning, so a
@@ -23,13 +23,13 @@ CONFIG_FILE_NAME = "config.json"
 
 
 def config_home() -> Path:
-    """Return the ccnight state directory (not guaranteed to exist yet)."""
-    override = os.environ.get("CCNIGHT_HOME")
+    """Return the nightcrew state directory (not guaranteed to exist yet)."""
+    override = os.environ.get("NIGHTCREW_HOME")
     if override:
         return Path(override).expanduser()
     xdg = os.environ.get("XDG_CONFIG_HOME")
     base = Path(xdg).expanduser() if xdg else Path.home() / ".config"
-    return base / "ccnight"
+    return base / "nightcrew"
 
 
 @dataclass
@@ -68,7 +68,7 @@ class Config:
     append_system_prompt: str | None = None
     # Built-in unattended guardrails: inject a safe --allowedTools /
     # --disallowedTools preset (see runner.DEFAULT_*_TOOLS) into every run so
-    # ccnight ships safe by default with no settings.json edits. Set false to
+    # nightcrew ships safe by default with no settings.json edits. Set false to
     # rely entirely on the project's own permission config.
     guardrails: bool = True
     # Override the built-in allow / deny tool presets. None = use the default.
@@ -83,8 +83,8 @@ class Config:
     # URL), "feishu", "slack" or "generic".
     webhook_format: str = "auto"
     # Optional shell command executed for every notification, with the
-    # details exposed as $CCNIGHT_TITLE and $CCNIGHT_MESSAGE. Lets users
-    # plug in any messenger CLI without ccnight knowing about it.
+    # details exposed as $NIGHTCREW_TITLE and $NIGHTCREW_MESSAGE. Lets users
+    # plug in any messenger CLI without nightcrew knowing about it.
     notify_command: str | None = None
     # Extra regexes (case-insensitive) appended to the built-in
     # usage-limit detection patterns.
@@ -120,13 +120,13 @@ class Config:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             print(
-                f"ccnight: warning: ignoring invalid config file {path}: {exc}",
+                f"nightcrew: warning: ignoring invalid config file {path}: {exc}",
                 file=sys.stderr,
             )
             return cfg
         if not isinstance(raw, dict):
             print(
-                f"ccnight: warning: {path} must contain a JSON object; using defaults",
+                f"nightcrew: warning: {path} must contain a JSON object; using defaults",
                 file=sys.stderr,
             )
             return cfg

@@ -3,13 +3,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ccnight"
+name = "nightcrew"
 version = "0.1.0"
 description = "Quota-aware task queue and auto-resume daemon for Claude Code - use the quota you already paid for while you sleep."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "ccnight contributors" }]
+authors = [{ name = "nightcrew contributors" }]
 keywords = [
   "claude",
   "claude-code",
@@ -37,11 +37,11 @@ dependencies = []
 dev = ["pytest>=7"]
 
 [project.scripts]
-ccnight = "ccnight.cli:main"
+nightcrew = "nightcrew.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ccnight/ccnight"
-Issues = "https://github.com/ccnight/ccnight/issues"
+Homepage = "https://github.com/nightcrew/nightcrew"
+Issues = "https://github.com/nightcrew/nightcrew/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

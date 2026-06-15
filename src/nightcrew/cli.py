@@ -1,4 +1,4 @@
-"""Command line interface for ccnight.
+"""Command line interface for nightcrew.
 
 Subcommands: add, list, status, daemon, run-once, logs, remove, doctor,
 install-service, uninstall-service.
@@ -50,7 +50,7 @@ def _one_line(text: str, width: int) -> str:
 def cmd_add(args: argparse.Namespace, config: Config) -> int:
     repo = Path(args.repo).expanduser().resolve()
     if not repo.is_dir():
-        print(f"ccnight: error: --repo {repo} is not a directory", file=sys.stderr)
+        print(f"nightcrew: error: --repo {repo} is not a directory", file=sys.stderr)
         return 2
     queue = TaskQueue(config.home)
     task = queue.add(args.prompt, str(repo), args.claude_args)
@@ -67,7 +67,7 @@ def cmd_add(args: argparse.Namespace, config: Config) -> int:
             "\n"
             "  WARNING: the daemon is NOT running - queued tasks will never start.\n"
             "  Before you walk away, launch it (plugged in, lid open):\n"
-            '    caffeinate -i ccnight daemon --window "23:30-08:00"\n',
+            '    caffeinate -i nightcrew daemon --window "23:30-08:00"\n',
             file=sys.stderr,
         )
     return 0
@@ -76,7 +76,7 @@ def cmd_add(args: argparse.Namespace, config: Config) -> int:
 def cmd_list(args: argparse.Namespace, config: Config) -> int:
     tasks = TaskQueue(config.home).all()
     if not tasks:
-        print("queue is empty - add a task with: ccnight add \"<prompt>\" --repo <path>")
+        print("queue is empty - add a task with: nightcrew add \"<prompt>\" --repo <path>")
         return 0
     header = f"{'ID':<10}{'STATUS':<15}{'CREATED':<18}{'REPO':<28}PROMPT"
     print(header)
@@ -132,11 +132,11 @@ def cmd_daemon(args: argparse.Namespace, config: Config) -> int:
         try:
             window = scheduler.parse_window(window_str)
         except ValueError as exc:
-            print(f"ccnight: error: {exc}", file=sys.stderr)
+            print(f"nightcrew: error: {exc}", file=sys.stderr)
             return 2
     reserve = args.reserve if args.reserve is not None else config.reserve
     if reserve is not None and not 0 <= reserve <= 99:
-        print("ccnight: error: reserve must be between 0 and 99", file=sys.stderr)
+        print("nightcrew: error: reserve must be between 0 and 99", file=sys.stderr)
         return 2
     return scheduler.run_daemon(
         config,
@@ -152,13 +152,13 @@ def cmd_run_once(args: argparse.Namespace, config: Config) -> int:
     try:
         task = queue.get(args.task_id)
     except (TaskNotFound, AmbiguousTaskId) as exc:
-        print(f"ccnight: error: {exc}", file=sys.stderr)
+        print(f"nightcrew: error: {exc}", file=sys.stderr)
         return 2
     if task.status == STATUS_RUNNING:
-        print(f"ccnight: error: task {task.id} is already running", file=sys.stderr)
+        print(f"nightcrew: error: task {task.id} is already running", file=sys.stderr)
         return 2
     if not scheduler.preflight_ok(config):
-        print("ccnight: preflight failed (e.g. IP/VPN not ready); not running",
+        print("nightcrew: preflight failed (e.g. IP/VPN not ready); not running",
               file=sys.stderr)
         return 2
     claimed = queue.update(
@@ -198,10 +198,10 @@ def cmd_retry(args: argparse.Namespace, config: Config) -> int:
         elif args.task_id:
             done = queue.requeue(args.task_id)
         else:
-            print("ccnight: error: give a task id or --all", file=sys.stderr)
+            print("nightcrew: error: give a task id or --all", file=sys.stderr)
             return 2
     except (TaskNotFound, AmbiguousTaskId, StaleTask) as exc:
-        print(f"ccnight: error: {exc}", file=sys.stderr)
+        print(f"nightcrew: error: {exc}", file=sys.stderr)
         return 2
     if not done:
         print("no failed tasks to retry")
@@ -215,7 +215,7 @@ def cmd_doctor(args: argparse.Namespace, config: Config) -> int:
     allow = config.allow_tools if config.allow_tools is not None else runner.DEFAULT_ALLOW_TOOLS
     deny = config.deny_tools if config.deny_tools is not None else runner.DEFAULT_DENY_TOOLS
 
-    print("ccnight configuration")
+    print("nightcrew configuration")
     print(f"  home:            {config.home}")
     print(f"  config file:     {config.config_path}"
           + ("" if config.config_path.exists() else "  (none yet, using defaults)"))
@@ -263,7 +263,7 @@ def cmd_remove(args: argparse.Namespace, config: Config) -> int:
     try:
         task = queue.remove(args.task_id, force=args.force)
     except (TaskNotFound, AmbiguousTaskId, StaleTask) as exc:
-        print(f"ccnight: error: {exc}", file=sys.stderr)
+        print(f"nightcrew: error: {exc}", file=sys.stderr)
         return 2
     print(f"removed task {task.id} ({task.status})")
     return 0
@@ -274,7 +274,7 @@ def cmd_logs(args: argparse.Namespace, config: Config) -> int:
     try:
         task = queue.get(args.task_id)
     except (TaskNotFound, AmbiguousTaskId) as exc:
-        print(f"ccnight: error: {exc}", file=sys.stderr)
+        print(f"nightcrew: error: {exc}", file=sys.stderr)
         return 2
     log_path = Path(task.log_file) if task.log_file else runner.log_path_for(config, task)
     if not log_path.exists():
@@ -291,13 +291,13 @@ def cmd_logs(args: argparse.Namespace, config: Config) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="ccnight",
+        prog="nightcrew",
         description=(
             "Quota-aware task queue for Claude Code: queue prompts, run them "
             "unattended, pause on usage limits and resume when the quota window "
             "resets."
         ),
-        epilog="Run 'ccnight <command> --help' for details on a command.",
+        epilog="Run 'nightcrew <command> --help' for details on a command.",
     )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
@@ -437,7 +437,7 @@ def build_parser() -> argparse.ArgumentParser:
         "install-service",
         help="(macOS) run the daemon as an always-on background service",
         description="Install a LaunchAgent so the scheduling daemon starts on "
-        "login and stays running. After this, just `ccnight add` - no need to "
+        "login and stays running. After this, just `nightcrew add` - no need to "
         "start the daemon manually.",
     )
     p_install.add_argument("--window", metavar="HH:MM-HH:MM", default=None,
@@ -449,7 +449,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_uninstall = sub.add_parser(
         "uninstall-service",
         help="(macOS) remove the always-on background service",
-        description="Unload and delete the ccnight LaunchAgent.",
+        description="Unload and delete the nightcrew LaunchAgent.",
     )
     p_uninstall.set_defaults(func=cmd_uninstall_service)
 
@@ -463,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args, config)
     except KeyboardInterrupt:
-        print("\nccnight: interrupted", file=sys.stderr)
+        print("\nnightcrew: interrupted", file=sys.stderr)
         return 130
 
 

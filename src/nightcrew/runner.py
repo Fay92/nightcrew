@@ -36,7 +36,7 @@ FAILED = "failed"
 # approve a prompt, headless claude silently *denies* anything not allowed, so
 # we both deny dangerous commands outright (deny wins over allow) and allow the
 # build/read-only commands a task needs to verify itself. This ships safe by
-# default — installing ccnight is enough, no settings.json edits required.
+# default — installing nightcrew is enough, no settings.json edits required.
 DEFAULT_DENY_TOOLS: tuple[str, ...] = (
     # never commit / push / rewrite history or trash uncommitted work
     "Bash(git commit:*)", "Bash(git push:*)", "Bash(git add:*)",
@@ -129,8 +129,8 @@ def log_path_for(config: Config, task: Task) -> Path:
 
 
 def _meta(log, kind: str, **payload) -> None:
-    """Write a ccnight-namespaced JSON line into the task log."""
-    log.write(json.dumps({"type": f"ccnight.{kind}", "at": utcnow_iso(), **payload}) + "\n")
+    """Write a nightcrew-namespaced JSON line into the task log."""
+    log.write(json.dumps({"type": f"nightcrew.{kind}", "at": utcnow_iso(), **payload}) + "\n")
 
 
 def run_task(config: Config, task: Task) -> RunOutcome:

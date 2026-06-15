@@ -5,8 +5,8 @@ import datetime as dt
 
 import pytest
 
-from ccnight import daemon
-from ccnight.queue import (
+from nightcrew import daemon
+from nightcrew.queue import (
     STATUS_BLOCKED_LIMIT,
     STATUS_DONE,
     STATUS_PENDING,
@@ -285,8 +285,8 @@ def test_daemon_refuses_second_instance(config, monkeypatch, capsys):
 
 
 def test_shift_report_summary():
-    from ccnight.daemon import shift_report
-    from ccnight.queue import Task
+    from nightcrew.daemon import shift_report
+    from nightcrew.queue import Task
 
     def t(id_, status, start, end):
         task = Task(id=id_, prompt="p", repo="/tmp", status=status)
@@ -307,12 +307,12 @@ def test_shift_report_summary():
 
 
 def test_daemon_sends_shift_report_when_queue_drains(config, monkeypatch):
-    from ccnight import daemon as scheduler
-    from ccnight.queue import TaskQueue
+    from nightcrew import daemon as scheduler
+    from nightcrew.queue import TaskQueue
 
     calls = []
     monkeypatch.setattr(
-        "ccnight.daemon.notify", lambda cfg, title, msg: calls.append((title, msg))
+        "nightcrew.daemon.notify", lambda cfg, title, msg: calls.append((title, msg))
     )
     monkeypatch.setenv("FAKE_CLAUDE_MODE", "ok")
     queue = TaskQueue(config.home)
@@ -328,7 +328,7 @@ def test_daemon_sends_shift_report_when_queue_drains(config, monkeypatch):
 
 
 def test_daemon_starts_and_stops_caffeinate(config, monkeypatch):
-    from ccnight import daemon as scheduler
+    from nightcrew import daemon as scheduler
 
     started = {}
     class FakeProc:
@@ -344,7 +344,7 @@ def test_daemon_starts_and_stops_caffeinate(config, monkeypatch):
 
 
 def test_daemon_no_caffeinate_flag(config, monkeypatch):
-    from ccnight import daemon as scheduler
+    from nightcrew import daemon as scheduler
 
     called = {"n": 0}
     monkeypatch.setattr(scheduler, "_start_caffeinate", lambda: called.__setitem__("n", called["n"] + 1))
@@ -355,8 +355,8 @@ def test_daemon_no_caffeinate_flag(config, monkeypatch):
 def test_no_resume_storm_when_reset_in_past():
     """A reset time in the past must not cause immediate back-to-back resumes."""
     import datetime as dt
-    from ccnight.daemon import _next_wake_for_blocked, MIN_RESUME_BACKOFF
-    from ccnight.queue import Task
+    from nightcrew.daemon import _next_wake_for_blocked, MIN_RESUME_BACKOFF
+    from nightcrew.queue import Task
 
     now = dt.datetime(2026, 6, 12, 4, 0, 0, tzinfo=dt.timezone.utc)
     just_blocked = (now - dt.timedelta(seconds=10)).isoformat()
@@ -373,8 +373,8 @@ def test_no_resume_storm_when_reset_in_past():
 
 def test_future_reset_is_respected_as_is():
     import datetime as dt
-    from ccnight.daemon import _next_wake_for_blocked
-    from ccnight.queue import Task
+    from nightcrew.daemon import _next_wake_for_blocked
+    from nightcrew.queue import Task
 
     now = dt.datetime(2026, 6, 12, 1, 0, 0, tzinfo=dt.timezone.utc)
     future_reset = (now + dt.timedelta(hours=2)).isoformat()
@@ -386,11 +386,11 @@ def test_future_reset_is_respected_as_is():
 
 def test_preflight_holds_when_failing(config, monkeypatch):
     """A failing preflight must hold the task (stay pending), not run it."""
-    from ccnight import daemon as scheduler
-    from ccnight.queue import TaskQueue
+    from nightcrew import daemon as scheduler
+    from nightcrew.queue import TaskQueue
 
     config.preflight_command = "exit 1"  # always fails
-    monkeypatch.setattr("ccnight.daemon.preflight_ok", lambda c: False)
+    monkeypatch.setattr("nightcrew.daemon.preflight_ok", lambda c: False)
     ran = {"n": 0}
     monkeypatch.setattr(scheduler.runner, "run_task",
                         lambda *a, **k: ran.__setitem__("n", ran["n"] + 1))
@@ -403,14 +403,14 @@ def test_preflight_holds_when_failing(config, monkeypatch):
 
 
 def test_window_close_notifies_unfinished(config, monkeypatch):
-    from ccnight.daemon import preflight_ok  # noqa: ensure import path
-    from ccnight.daemon import TimeWindow
-    import ccnight.daemon as scheduler
-    from ccnight.queue import TaskQueue
+    from nightcrew.daemon import preflight_ok  # noqa: ensure import path
+    from nightcrew.daemon import TimeWindow
+    import nightcrew.daemon as scheduler
+    from nightcrew.queue import TaskQueue
     import datetime as dt
 
     calls = []
-    monkeypatch.setattr("ccnight.daemon.notify",
+    monkeypatch.setattr("nightcrew.daemon.notify",
                         lambda c, t, m: calls.append((t, m)))
     # force "now" outside a window that we pretend we were just inside
     q = TaskQueue(config.home)
@@ -418,7 +418,7 @@ def test_window_close_notifies_unfinished(config, monkeypatch):
     # window 22:00-08:00; pick a daytime now -> outside
     win = scheduler.parse_window("22:00-08:00")
     # local 14:00 (naive -> attach local tz, keeps the wall-clock time)
-    monkeypatch.setattr("ccnight.daemon.local_now",
+    monkeypatch.setattr("nightcrew.daemon.local_now",
                         lambda: dt.datetime(2026, 6, 15, 14, 0).astimezone())
     scheduler.run_daemon(config, window=win, reserve=None, caffeinate=False,
                          max_loops=1, idle_seconds=0, poll_seconds=0)
