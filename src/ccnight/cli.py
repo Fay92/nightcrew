@@ -190,6 +190,26 @@ def cmd_uninstall_service(args: argparse.Namespace, config: Config) -> int:
     return service.uninstall()
 
 
+def cmd_retry(args: argparse.Namespace, config: Config) -> int:
+    queue = TaskQueue(config.home)
+    try:
+        if args.all:
+            done = queue.requeue(None, all_failed=True)
+        elif args.task_id:
+            done = queue.requeue(args.task_id)
+        else:
+            print("ccnight: error: give a task id or --all", file=sys.stderr)
+            return 2
+    except (TaskNotFound, AmbiguousTaskId, StaleTask) as exc:
+        print(f"ccnight: error: {exc}", file=sys.stderr)
+        return 2
+    if not done:
+        print("no failed tasks to retry")
+    for t in done:
+        print(f"requeued {t.id} -> pending")
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace, config: Config) -> int:
     """Print the effective configuration and unattended guardrails."""
     allow = config.allow_tools if config.allow_tools is not None else runner.DEFAULT_ALLOW_TOOLS
@@ -394,6 +414,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="also remove a task that is currently running",
     )
     p_remove.set_defaults(func=cmd_remove)
+
+    p_retry = sub.add_parser(
+        "retry",
+        help="re-queue failed tasks so the daemon runs them again",
+        description="Reset a failed task back to pending (fresh run). Use --all "
+        "to re-queue every failed task at once.",
+    )
+    p_retry.add_argument("task_id", nargs="?", help="task id or unique prefix")
+    p_retry.add_argument("--all", action="store_true", help="re-queue all failed tasks")
+    p_retry.set_defaults(func=cmd_retry)
 
     p_doctor = sub.add_parser(
         "doctor",

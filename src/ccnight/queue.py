@@ -241,6 +241,37 @@ class TaskQueue:
             self._write([t for t in tasks if t.id != task.id])
             return task
 
+    def requeue(self, ref: str | None, *, all_failed: bool = False) -> list[Task]:
+        """Reset failed/done tasks back to pending for a fresh retry.
+
+        Clears the prior run's state (error, session id, timestamps). Running
+        tasks are never touched.
+        """
+        with self._lock():
+            tasks = self._read()
+            if all_failed:
+                targets = [t for t in tasks if t.status == STATUS_FAILED]
+            else:
+                matches = [t for t in tasks if t.id == ref] or [
+                    t for t in tasks if ref and t.id.startswith(ref)
+                ]
+                if not matches:
+                    raise TaskNotFound(f"no task matches {ref!r}")
+                if len(matches) > 1:
+                    ids = ", ".join(t.id for t in matches)
+                    raise AmbiguousTaskId(f"{ref!r} matches several tasks: {ids}")
+                if matches[0].status == STATUS_RUNNING:
+                    raise StaleTask(f"task {matches[0].id} is running")
+                targets = matches
+            for t in targets:
+                t.status = STATUS_PENDING
+                t.error = None
+                t.session_id = None
+                t.started_at = t.finished_at = t.reset_at = t.blocked_at = None
+            if targets:
+                self._write(tasks)
+            return targets
+
     def update(
         self, task_id: str, *, expect_status: str | None = None, **changes
     ) -> Task:

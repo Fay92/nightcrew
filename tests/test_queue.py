@@ -142,3 +142,18 @@ def test_remove_running_requires_force(ccnight_home):
     except StaleTask:
         pass
     assert q.remove(task.id, force=True).id == task.id
+
+
+def test_requeue_failed_resets_state(ccnight_home):
+    from ccnight.queue import TaskQueue, STATUS_FAILED, STATUS_PENDING
+
+    q = TaskQueue(ccnight_home)
+    t = q.add("job", "/tmp")
+    q.update(t.id, status=STATUS_FAILED, error="boom", session_id="s1",
+             started_at="x", finished_at="y")
+    done = q.requeue(None, all_failed=True)
+    assert len(done) == 1
+    back = q.get(t.id)
+    assert back.status == STATUS_PENDING
+    assert back.error is None and back.session_id is None
+    assert back.started_at is None and back.finished_at is None
