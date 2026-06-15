@@ -144,3 +144,24 @@ def test_merge_config_preserves_existing(tmp_path):
     data = json.loads(p.read_text())
     assert data["window"] == "22:00-08:00"   # updated
     assert data["notify_command"] == "x"     # preserved
+
+
+def test_install_skill_copies_bundled(tmp_path, monkeypatch):
+    from nightcrew import onboard
+    dest = tmp_path / "skills" / "nightcrew"
+    monkeypatch.setattr(onboard, "SKILL_DEST", dest)
+    assert onboard.install_skill() == 0
+    skill = dest / "SKILL.md"
+    assert skill.exists()
+    text = skill.read_text()
+    assert "name: nightcrew" in text          # frontmatter intact
+    assert "自包含 prompt" in text             # core guidance shipped
+
+
+def test_setup_non_interactive_keeps_defaults(nightcrew_home, monkeypatch):
+    import io
+    from nightcrew import onboard
+    from nightcrew.config import Config
+    monkeypatch.setattr("sys.stdin", io.StringIO())  # isatty() -> False
+    cfg = Config.load(home=nightcrew_home)
+    assert onboard.setup(cfg) == 0  # graceful no-op, no crash

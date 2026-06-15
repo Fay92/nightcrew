@@ -40,11 +40,15 @@ dev = ["pytest>=7"]
 nightcrew = "nightcrew.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/nightcrew/nightcrew"
-Issues = "https://github.com/nightcrew/nightcrew/issues"
+Homepage = "https://github.com/Fay92/nightcrew"
+Issues = "https://github.com/Fay92/nightcrew/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# Ship the bundled skill so `nightcrew install-skill` can copy it.
+nightcrew = ["skill/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

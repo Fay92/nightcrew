@@ -1,7 +1,7 @@
 """Command line interface for nightcrew.
 
 Subcommands: add, list, status, daemon, run-once, logs, remove, doctor,
-install-service, uninstall-service.
+install-service, uninstall-service, install-skill, setup.
 """
 
 from __future__ import annotations
@@ -178,6 +178,16 @@ def cmd_run_once(args: argparse.Namespace, config: Config) -> int:
         print(f"  reset at: {outcome.reset_at:%Y-%m-%d %H:%M %Z}")
     print(f"  log: {runner.log_path_for(config, applied)}")
     return 0 if applied.status == STATUS_DONE else 1
+
+
+def cmd_install_skill(args: argparse.Namespace, config: Config) -> int:
+    from . import onboard
+    return onboard.install_skill()
+
+
+def cmd_setup(args: argparse.Namespace, config: Config) -> int:
+    from . import onboard
+    return onboard.setup(config)
 
 
 def cmd_install_service(args: argparse.Namespace, config: Config) -> int:
@@ -452,6 +462,21 @@ def build_parser() -> argparse.ArgumentParser:
         description="Unload and delete the nightcrew LaunchAgent.",
     )
     p_uninstall.set_defaults(func=cmd_uninstall_service)
+
+    p_skill = sub.add_parser(
+        "install-skill",
+        help="install the Claude Code skill so you can queue tasks by chatting",
+        description="Copy the bundled nightcrew skill into ~/.claude/skills/.",
+    )
+    p_skill.set_defaults(func=cmd_install_skill)
+
+    p_setup = sub.add_parser(
+        "setup",
+        help="interactive first-run setup (nightly window + notifications)",
+        description="Walk through window and notification settings, written to "
+        "your config.json.",
+    )
+    p_setup.set_defaults(func=cmd_setup)
 
     return parser
 

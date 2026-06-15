@@ -29,15 +29,28 @@ This is one of the most-requested Claude Code features: [anthropics/claude-code#
 
 ## Install
 
+**One-shot (recommended)** — installs the CLI, the always-on service (macOS),
+the Claude Code skill, and runs interactive setup:
+
 ```bash
-pipx install nightcrew            # once published to PyPI
-# until then, from source:
-pipx install git+https://github.com/nightcrew/nightcrew
-# or for development:
-git clone https://github.com/nightcrew/nightcrew && cd nightcrew && pip install -e ".[dev]"
+git clone https://github.com/Fay92/nightcrew && cd nightcrew && ./install.sh
 ```
 
-Requirements: Python 3.11+, the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) logged in with your subscription. Zero third-party runtime dependencies (stdlib only).
+After this you only ever run `nightcrew add` — the daemon is registered with
+launchd (starts on login, restarts on crash) and runs your queue every night.
+
+**Manual / piecemeal:**
+
+```bash
+pipx install git+https://github.com/Fay92/nightcrew   # the CLI
+nightcrew install-service        # macOS: always-on background daemon
+nightcrew install-skill          # Claude Code skill (queue tasks by chatting)
+nightcrew setup                  # pick your nightly window + notifications
+# for development:
+git clone https://github.com/Fay92/nightcrew && cd nightcrew && pip install -e ".[dev]"
+```
+
+Requirements: Python 3.11+, the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) logged in with your subscription. Zero third-party runtime dependencies (stdlib only). The always-on service is macOS-only (launchd); on Linux run `nightcrew daemon` under systemd or tmux.
 
 ## Quickstart
 
