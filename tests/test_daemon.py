@@ -390,7 +390,7 @@ def test_preflight_holds_when_failing(config, monkeypatch):
     from ccnight.queue import TaskQueue
 
     config.preflight_command = "exit 1"  # always fails
-    monkeypatch.setattr("ccnight.daemon._preflight_ok", lambda c: False)
+    monkeypatch.setattr("ccnight.daemon.preflight_ok", lambda c: False)
     ran = {"n": 0}
     monkeypatch.setattr(scheduler.runner, "run_task",
                         lambda *a, **k: ran.__setitem__("n", ran["n"] + 1))
@@ -403,7 +403,7 @@ def test_preflight_holds_when_failing(config, monkeypatch):
 
 
 def test_window_close_notifies_unfinished(config, monkeypatch):
-    from ccnight.daemon import _preflight_ok  # noqa: ensure import path
+    from ccnight.daemon import preflight_ok  # noqa: ensure import path
     from ccnight.daemon import TimeWindow
     import ccnight.daemon as scheduler
     from ccnight.queue import TaskQueue

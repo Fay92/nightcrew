@@ -157,6 +157,10 @@ def cmd_run_once(args: argparse.Namespace, config: Config) -> int:
     if task.status == STATUS_RUNNING:
         print(f"ccnight: error: task {task.id} is already running", file=sys.stderr)
         return 2
+    if not scheduler.preflight_ok(config):
+        print("ccnight: preflight failed (e.g. IP/VPN not ready); not running",
+              file=sys.stderr)
+        return 2
     claimed = queue.update(
         task.id,
         status=STATUS_RUNNING,

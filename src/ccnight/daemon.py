@@ -527,7 +527,7 @@ def run_daemon(
                 # Preflight gate (e.g. IP/VPN check): on failure, hold the task
                 # in the queue and retry shortly -- never fail it for a transient
                 # network/egress condition.
-                if config.preflight_command and not _preflight_ok(config):
+                if config.preflight_command and not preflight_ok(config):
                     msg = "[daemon] preflight failed, holding queue (will retry)"
                     if msg != last_logged:
                         print(msg)
@@ -589,7 +589,7 @@ def run_daemon(
     return 0
 
 
-def _preflight_ok(config: Config) -> bool:
+def preflight_ok(config: Config) -> bool:
     """Run the configured preflight command; True if it exits 0 (or none set)."""
     if not config.preflight_command:
         return True
