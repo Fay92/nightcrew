@@ -403,23 +403,41 @@ def test_preflight_holds_when_failing(config, monkeypatch):
 
 
 def test_window_close_notifies_unfinished(config, monkeypatch):
-    from nightcrew.daemon import preflight_ok  # noqa: ensure import path
-    from nightcrew.daemon import TimeWindow
-    import nightcrew.daemon as scheduler
-    from nightcrew.queue import TaskQueue
+    """The real edge: inside the window, then time crosses to outside -> notify."""
     import datetime as dt
+    import nightcrew.daemon as scheduler
+    from nightcrew.queue import TaskQueue, STATUS_BLOCKED_LIMIT
 
     calls = []
     monkeypatch.setattr("nightcrew.daemon.notify",
                         lambda c, t, m: calls.append((t, m)))
-    # force "now" outside a window that we pretend we were just inside
+    inwin = dt.datetime(2026, 6, 16, 2, 0).astimezone()   # inside 22:00-08:00
+    outwin = dt.datetime(2026, 6, 16, 9, 0).astimezone()  # outside
+    seq = iter([inwin, inwin, outwin, outwin])
+    monkeypatch.setattr("nightcrew.daemon.local_now", lambda: next(seq, outwin))
     q = TaskQueue(config.home)
-    q.add("leftover", "/tmp")
-    # window 22:00-08:00; pick a daytime now -> outside
+    t = q.add("leftover", "/tmp")
+    # blocked task with reset far out: never runs, stays "unfinished"
+    future = dt.datetime(2026, 6, 17, 3, 0).astimezone().isoformat()
+    q.update(t.id, status=STATUS_BLOCKED_LIMIT, reset_at=future,
+             blocked_at=inwin.isoformat())
     win = scheduler.parse_window("22:00-08:00")
-    # local 14:00 (naive -> attach local tz, keeps the wall-clock time)
+    scheduler.run_daemon(config, window=win, reserve=None, caffeinate=False,
+                         max_loops=2, idle_seconds=0, poll_seconds=0)
+    assert any("window closed" in t for t, _ in calls)
+
+
+def test_no_spurious_window_close_on_startup_outside_window(config, monkeypatch):
+    """Launching the daemon outside the window must NOT fire 'window closed'."""
+    import datetime as dt
+    import nightcrew.daemon as scheduler
+    from nightcrew.queue import TaskQueue
+    calls = []
+    monkeypatch.setattr("nightcrew.daemon.notify", lambda c, t, m: calls.append((t, m)))
     monkeypatch.setattr("nightcrew.daemon.local_now",
-                        lambda: dt.datetime(2026, 6, 15, 14, 0).astimezone())
+                        lambda: dt.datetime(2026, 6, 16, 14, 0).astimezone())
+    TaskQueue(config.home).add("leftover", "/tmp")
+    win = scheduler.parse_window("22:00-08:00")  # 14:00 is outside
     scheduler.run_daemon(config, window=win, reserve=None, caffeinate=False,
                          max_loops=1, idle_seconds=0, poll_seconds=0)
-    assert any("window closed" in t for t, _ in calls)
+    assert not any("window closed" in t for t, _ in calls)

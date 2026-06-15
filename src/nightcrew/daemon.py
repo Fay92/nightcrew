@@ -499,7 +499,9 @@ def run_daemon(
     last_logged = ""
     loops = 0
     batch: list[Task] = []
-    was_in_window = True  # for window-close edge detection
+    # Seed with the actual window state at startup so launching outside the
+    # window doesn't fire a spurious "window closed" notification.
+    was_in_window = window is None or window.contains(local_now().time())
     try:
         while max_loops is None or loops < max_loops:
             loops += 1
