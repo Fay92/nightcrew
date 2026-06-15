@@ -4,6 +4,8 @@
 
 ![status](https://img.shields.io/badge/status-alpha-orange) ![python](https://img.shields.io/badge/python-3.11%2B-blue) ![deps](https://img.shields.io/badge/runtime%20deps-zero-brightgreen) ![license](https://img.shields.io/badge/license-MIT-green)
 
+**English** | [简体中文](README.zh-CN.md)
+
 Queue up coding tasks in the evening. While you sleep, `nightcrew` runs them one by one through the official `claude` CLI in headless mode. When it hits your usage limit, it parses the reset time, pauses, and resumes the **same session** the moment your quota window resets. When everything is done (or stuck), it notifies you.
 
 ```
