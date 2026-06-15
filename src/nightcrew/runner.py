@@ -88,14 +88,17 @@ class RunOutcome:
     detail: str = ""
 
 
-def build_command(config: Config, task: Task, *, resume: bool) -> list[str]:
+def build_command(
+    config: Config, task: Task, *, resume: bool, extra_system: str | None = None
+) -> list[str]:
     """Build the claude invocation for *task*.
 
     Fresh run:   claude -p "<prompt>" --output-format stream-json --verbose
     Resumed run: claude -p --resume <session_id> "<continue_prompt>" ...
 
     ``--permission-mode`` is appended from config unless the task's own
-    ``claude_args`` already set one (user args win).
+    ``claude_args`` already set one (user args win). ``extra_system`` (e.g. a
+    worktree-isolation note) is prepended to the configured working protocol.
     """
     cmd = [config.claude_bin, "-p"]
     if resume and task.session_id:
@@ -108,8 +111,9 @@ def build_command(config: Config, task: Task, *, resume: bool) -> list[str]:
         cmd += ["--model", config.model]
     if config.permission_mode and "--permission-mode" not in user_args:
         cmd += ["--permission-mode", config.permission_mode]
-    if config.append_system_prompt and "--append-system-prompt" not in user_args:
-        cmd += ["--append-system-prompt", config.append_system_prompt]
+    system_parts = [p for p in (extra_system, config.append_system_prompt) if p]
+    if system_parts and "--append-system-prompt" not in user_args:
+        cmd += ["--append-system-prompt", "\n\n".join(system_parts)]
     if config.guardrails and "--allowedTools" not in user_args:
         allow = config.allow_tools if config.allow_tools is not None else DEFAULT_ALLOW_TOOLS
         deny = config.deny_tools if config.deny_tools is not None else DEFAULT_DENY_TOOLS
@@ -151,7 +155,29 @@ def _meta(log, kind: str, **payload) -> None:
 def run_task(config: Config, task: Task) -> RunOutcome:
     """Run *task* once (resuming when it already has a session id)."""
     resume = bool(task.session_id)
-    cmd = build_command(config, task, resume=resume)
+
+    # Isolation: run in a sibling worktree instead of the main checkout. If it
+    # can't be set up, fail the task — never silently run in the user's daytime
+    # working copy, which is exactly what isolation is meant to protect.
+    cwd = task.repo
+    extra_system = None
+    if config.worktree_isolation:
+        from . import worktree
+        try:
+            wt = worktree.ensure_worktree(task.repo)
+        except RuntimeError as exc:
+            return RunOutcome(FAILED, task.session_id, None,
+                              f"worktree isolation failed: {exc}")
+        cwd = str(wt)
+        extra_system = (
+            f"You are running in an isolated git worktree at {cwd} on branch "
+            f"'{worktree.WORK_BRANCH}'. This is intentional — ignore any task "
+            f"instruction telling you to verify you are on a specific other "
+            f"branch (e.g. a feature branch); your changes here are reviewed and "
+            f"merged back separately."
+        )
+
+    cmd = build_command(config, task, resume=resume, extra_system=extra_system)
     log_path = log_path_for(config, task)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -162,7 +188,7 @@ def run_task(config: Config, task: Task) -> RunOutcome:
     try:
         proc = subprocess.Popen(
             cmd,
-            cwd=task.repo,
+            cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

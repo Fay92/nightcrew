@@ -318,3 +318,21 @@ def test_model_unavailable_is_transient(config):
                   suspicious=["There's an issue with the selected model (claude-opus-4-8)"],
                   session_id=None, timed_out=False)
     assert o.status == TRANSIENT
+
+
+def test_build_command_extra_system_merges_with_protocol(config):
+    from nightcrew.runner import build_command
+    config.append_system_prompt = "WORK-PROTOCOL"
+    cmd = build_command(config, make_task("/tmp"), resume=False,
+                        extra_system="WORKTREE-NOTE")
+    i = cmd.index("--append-system-prompt")
+    assert "WORKTREE-NOTE" in cmd[i + 1] and "WORK-PROTOCOL" in cmd[i + 1]
+
+
+def test_run_task_isolation_failure_is_failed(config, tmp_path):
+    from nightcrew.queue import Task
+    config.worktree_isolation = True
+    task = Task(id="w1", prompt="x", repo=str(tmp_path / "not-a-repo"), status="pending")
+    out = runner.run_task(config, task)
+    assert out.status == runner.FAILED
+    assert "worktree isolation failed" in out.detail

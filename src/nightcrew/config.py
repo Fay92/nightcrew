@@ -57,6 +57,11 @@ class Config:
     # Stall watchdog: if a running task produces no new log output for this many
     # seconds it is considered hung, killed, and the daemon moves on. None = off.
     stall_timeout_seconds: int | None = 1200
+    # Run each repo's tasks in an isolated sibling git worktree
+    # (<repo>_worktree on the 'nightcrew-work' branch) instead of its main
+    # checkout, so daytime work is never touched. Tasks on the same repo share
+    # the worktree (dependent milestones accumulate). Review/merge is manual.
+    worktree_isolation: bool = False
     # Passed as --permission-mode unless the task's claude_args already set
     # one. Use an empty string to never pass the flag.
     permission_mode: str = "acceptEdits"
@@ -137,6 +142,7 @@ class Config:
             "reserve",
             "preflight_command",
             "stall_timeout_seconds",
+            "worktree_isolation",
             "permission_mode",
             "continue_prompt",
             "append_system_prompt",

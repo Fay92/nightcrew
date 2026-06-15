@@ -1,7 +1,7 @@
 """Command line interface for nightcrew.
 
 Subcommands: add, list, status, daemon, run-once, logs, remove, doctor,
-install-service, uninstall-service, install-skill, setup.
+install-service, uninstall-service, install-skill, setup, worktrees.
 """
 
 from __future__ import annotations
@@ -190,6 +190,22 @@ def cmd_setup(args: argparse.Namespace, config: Config) -> int:
     return onboard.setup(config)
 
 
+def cmd_worktrees(args: argparse.Namespace, config: Config) -> int:
+    from . import worktree
+    repos = [t.repo for t in TaskQueue(config.home).all()]
+    found = worktree.existing_worktrees(repos)
+    if not found:
+        print("no nightcrew worktrees (isolation off, or none created yet)")
+        return 0
+    print("nightcrew worktrees — review, then merge back manually:")
+    for repo, wt in found:
+        print(f"\n  {wt}")
+        print(f"    review:  cd {wt} && git diff")
+        print(f"    merge:   git -C {repo} merge {worktree.WORK_BRANCH}")
+        print(f"    discard: git -C {repo} worktree remove {wt}")
+    return 0
+
+
 def cmd_install_service(args: argparse.Namespace, config: Config) -> int:
     from . import service
     return service.install(config, window=args.window, reserve=args.reserve)
@@ -239,6 +255,8 @@ def cmd_doctor(args: argparse.Namespace, config: Config) -> int:
     print(f"  task timeout:    {timeout}")
     stall = f"{config.stall_timeout_seconds}s (kill if no output)" if config.stall_timeout_seconds else "off"
     print(f"  stall watchdog:  {stall}")
+    wt = "on (runs in <repo>_worktree)" if config.worktree_isolation else "off"
+    print(f"  worktree isol.:  {wt}")
     if config.append_system_prompt:
         first = config.append_system_prompt.strip().splitlines()[0]
         print(f"  work protocol:   on ({first[:50]}...)")
@@ -477,6 +495,14 @@ def build_parser() -> argparse.ArgumentParser:
         "your config.json.",
     )
     p_setup.set_defaults(func=cmd_setup)
+
+    p_worktrees = sub.add_parser(
+        "worktrees",
+        help="list isolation worktrees and how to review/merge them",
+        description="When worktree_isolation is on, show each repo's sibling "
+        "worktree and the commands to review, merge, or discard its changes.",
+    )
+    p_worktrees.set_defaults(func=cmd_worktrees)
 
     return parser
 
