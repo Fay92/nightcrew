@@ -63,6 +63,7 @@ nightcrew add "add input validation to every public endpoint" --repo ~/code/api 
 # 2. inspect the queue
 nightcrew list
 nightcrew status
+nightcrew web                     # browse tasks + read logs in a local web UI
 
 # 3. see what the scheduler would do, without calling claude
 nightcrew daemon --dry-run
@@ -198,11 +199,26 @@ Both are off by default; combine them as you like.
 | key | default | meaning |
 | --- | --- | --- |
 | `claude_bin` | `"claude"` | Claude CLI executable (set when not on PATH) |
+| `model` | `"claude-opus-4-8"` | `--model` for every run; `""` inherits the CLI default |
+| `window` | `null` | nightly run window `"HH:MM-HH:MM"` (may cross midnight); used when `--window` is not passed |
+| `reserve` | `null` | keep N% of the 5h window for interactive use (needs ccusage); used when `--reserve` is not passed |
+| `preflight_command` | `null` | shell command run before every claude call; non-zero exit skips that run (e.g. an IP/VPN check) |
+| `stall_timeout_seconds` | `1200` | kill a run that emits no output for this long (hung-task watchdog); `null` disables |
+| `worktree_isolation` | `false` | run each repo's tasks in a sibling `<repo>_worktree` on the `nightcrew-work` branch instead of its main checkout |
 | `permission_mode` | `"acceptEdits"` | default `--permission-mode`; `""` disables passing it |
 | `continue_prompt` | `"continue"` | prompt sent when resuming a limit-blocked session |
+| `append_system_prompt` | `null` | text injected via `--append-system-prompt` on every run (e.g. a working protocol) |
+| `guardrails` | `true` | inject the built-in safe `--allowedTools`/`--disallowedTools` preset; `false` relies on the repo's own permissions |
+| `allow_tools` | `null` | override the built-in allow preset (a list); `null` = default, `[]` = allow nothing |
+| `deny_tools` | `null` | override the built-in deny preset (a list); deny wins over allow |
+| `claude_extra_args` | `null` | extra raw arguments appended to every claude invocation |
 | `webhook_url` | `null` | POST target for notifications |
+| `webhook_format` | `"auto"` | webhook payload shape: `auto` / `feishu` / `slack` / `generic` |
+| `notify_command` | `null` | shell command run per notification, with `$NIGHTCREW_TITLE` / `$NIGHTCREW_MESSAGE` |
 | `extra_limit_patterns` | `[]` | extra case-insensitive regexes for limit detection |
 | `task_timeout_seconds` | `null` | hard kill switch for a single run (null = unlimited) |
+| `log_retention_days` | `14` | delete per-task `<id>.jsonl` logs older than this many days (by mtime); `0` keeps forever |
+| `daemon_log_max_bytes` | `5000000` | cap `daemon.log` (~5 MB), keeping the most recent half; `0` disables the cap |
 
 State lives in the same directory: `queue.json`, `logs/<task-id>.jsonl`, `daemon.pid`.
 Set `NIGHTCREW_HOME` to relocate everything.
