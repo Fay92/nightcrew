@@ -1,7 +1,8 @@
 """Command line interface for nightcrew.
 
-Subcommands: add, list, status, daemon, run-once, logs, remove, doctor,
-install-service, uninstall-service, install-skill, setup, worktrees.
+Subcommands: add, list, status, daemon, run-once, logs, remove, retry,
+clean, doctor, install-service, uninstall-service, install-skill, setup,
+worktrees.
 """
 
 from __future__ import annotations
@@ -78,7 +79,9 @@ def cmd_list(args: argparse.Namespace, config: Config) -> int:
     if not tasks:
         print("queue is empty - add a task with: nightcrew add \"<prompt>\" --repo <path>")
         return 0
-    header = f"{'ID':<10}{'STATUS':<15}{'CREATED':<18}{'REPO':<28}PROMPT"
+    tz = datetime.now().astimezone().strftime("%Z") or "local"
+    created_col = f"CREATED ({tz})"
+    header = f"{'ID':<10}{'STATUS':<15}{created_col:<18}{'REPO':<28}PROMPT"
     print(header)
     print("-" * len(header))
     home = str(Path.home())
@@ -257,6 +260,12 @@ def cmd_doctor(args: argparse.Namespace, config: Config) -> int:
     print(f"  stall watchdog:  {stall}")
     wt = "on (runs in <repo>_worktree)" if config.worktree_isolation else "off"
     print(f"  worktree isol.:  {wt}")
+    ret = (f"{config.log_retention_days} day(s)" if config.log_retention_days > 0
+           else "kept forever")
+    print(f"  log retention:   {ret}")
+    cap = (f"{config.daemon_log_max_bytes // 1_000_000} MB"
+           if config.daemon_log_max_bytes > 0 else "no cap")
+    print(f"  daemon.log cap:  {cap}")
     if config.append_system_prompt:
         first = config.append_system_prompt.strip().splitlines()[0]
         print(f"  work protocol:   on ({first[:50]}...)")
@@ -309,6 +318,32 @@ def cmd_logs(args: argparse.Namespace, config: Config) -> int:
         print(f"no log yet for task {task.id} (expected at {log_path})")
         return 1
     print(log_path.read_text(encoding="utf-8"), end="")
+    return 0
+
+
+def cmd_clean(args: argparse.Namespace, config: Config) -> int:
+    from . import cleanup
+
+    if config.log_retention_days <= 0:
+        print("task-log pruning disabled (log_retention_days = 0)")
+    else:
+        removed = cleanup.prune_task_logs(config.logs_dir, config.log_retention_days)
+        print(f"pruned {len(removed)} task log(s) older than "
+              f"{config.log_retention_days} day(s)")
+        for path in removed:
+            print(f"  - {path.name}")
+
+    if config.daemon_log_max_bytes <= 0:
+        print("daemon.log cap disabled (daemon_log_max_bytes = 0)")
+    else:
+        reclaimed = cleanup.trim_daemon_log(
+            config.daemon_log_path, config.daemon_log_max_bytes
+        )
+        if reclaimed:
+            print(f"trimmed daemon.log, reclaimed {reclaimed // 1024} KiB "
+                  f"(kept the most recent {config.daemon_log_max_bytes // 2 // 1024} KiB)")
+        else:
+            print("daemon.log within size cap, untouched")
     return 0
 
 
@@ -452,6 +487,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_retry.add_argument("task_id", nargs="?", help="task id or unique prefix")
     p_retry.add_argument("--all", action="store_true", help="re-queue all failed tasks")
     p_retry.set_defaults(func=cmd_retry)
+
+    p_clean = sub.add_parser(
+        "clean",
+        help="prune old task logs and cap the daemon log",
+        description="Delete per-task logs older than log_retention_days and "
+        "trim daemon.log to daemon_log_max_bytes. The daemon also does this at "
+        "startup and once a day; run it by hand to reclaim space now.",
+    )
+    p_clean.set_defaults(func=cmd_clean)
 
     p_doctor = sub.add_parser(
         "doctor",

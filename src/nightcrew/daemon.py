@@ -30,7 +30,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, time as dtime, timedelta
 
-from . import runner
+from . import cleanup, runner
 from .config import Config
 from .notify import notify
 from .queue import (
@@ -62,6 +62,9 @@ TRANSIENT_NOTIFY_AT = 3       # notify once after this many consecutive retries
 # we still wait at least this long instead of hammering the API in a loop.
 MIN_RESUME_BACKOFF = timedelta(minutes=5)
 CCUSAGE_TIMEOUT_SECONDS = 60
+# How often to prune old logs while the daemon keeps running (it also runs
+# once at startup, which covers the common launchd-restarts-on-login case).
+CLEANUP_INTERVAL = timedelta(days=1)
 
 
 def local_now() -> datetime:
@@ -458,6 +461,18 @@ def _recover_stale_running(queue: TaskQueue) -> None:
                 pass
 
 
+def _run_cleanup(config: Config) -> None:
+    """Prune old logs, logging a line only when something was reclaimed."""
+    removed, reclaimed = cleanup.run_cleanup(config)
+    bits = []
+    if removed:
+        bits.append(f"pruned {removed} old task log(s)")
+    if reclaimed:
+        bits.append(f"trimmed daemon.log by {reclaimed // 1024} KiB")
+    if bits:
+        print(f"[daemon] cleanup: {', '.join(bits)}")
+
+
 def _counts_line(tasks: list[Task]) -> str:
     by_status = {status: 0 for status in
                  (STATUS_PENDING, STATUS_RUNNING, STATUS_BLOCKED_LIMIT, STATUS_RETRY,
@@ -534,6 +549,7 @@ def run_daemon(
 
     queue = TaskQueue(config.home)
     _recover_stale_running(queue)
+    _run_cleanup(config)
     awake = "on (caffeinate)" if keep_awake else (
         "unavailable" if caffeinate else "off (--no-caffeinate)")
     print(
@@ -548,11 +564,16 @@ def run_daemon(
     # Seed with the actual window state at startup so launching outside the
     # window doesn't fire a spurious "window closed" notification.
     was_in_window = window is None or window.contains(local_now().time())
+    last_cleanup = local_now()
     try:
         while max_loops is None or loops < max_loops:
             loops += 1
             tasks = queue.all()
             now = local_now()
+
+            if now - last_cleanup >= CLEANUP_INTERVAL:
+                _run_cleanup(config)
+                last_cleanup = now
 
             # Window-close notification: when the run window ends with tasks
             # still unfinished, tell the user (req: "notify if not done by end").

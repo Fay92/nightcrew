@@ -96,10 +96,20 @@ class Config:
     extra_limit_patterns: list[str] = field(default_factory=list)
     # Hard cap for a single claude run, in seconds. None means no cap.
     task_timeout_seconds: int | None = None
+    # Delete per-task <id>.jsonl logs older than this many days (by mtime).
+    # 0 keeps them forever.
+    log_retention_days: int = 14
+    # Cap daemon.log (the launchd stdout/stderr redirect) at this many bytes,
+    # keeping the most recent half once it grows past it. 0 disables the cap.
+    daemon_log_max_bytes: int = 5_000_000
 
     @property
     def logs_dir(self) -> Path:
         return self.home / "logs"
+
+    @property
+    def daemon_log_path(self) -> Path:
+        return self.home / "daemon.log"
 
     @property
     def pid_path(self) -> Path:
@@ -152,6 +162,8 @@ class Config:
             "webhook_format",
             "notify_command",
             "task_timeout_seconds",
+            "log_retention_days",
+            "daemon_log_max_bytes",
         ):
             if key in raw:
                 setattr(cfg, key, raw[key])

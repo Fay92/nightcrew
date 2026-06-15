@@ -76,7 +76,7 @@ def install(config: Config, *, window: str | None, reserve: int | None) -> int:
     if updates:
         _merge_config(config.config_path, updates)
 
-    log_path = config.home / "daemon.log"
+    log_path = config.daemon_log_path
     plist = build_plist(
         nightcrew_bin=nightcrew_bin,
         home=config.home, log_path=log_path, path_env=os.environ.get("PATH", ""),
